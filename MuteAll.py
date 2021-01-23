@@ -3,11 +3,19 @@ from discord.ext import commands
 import json
 import random
 
-client = commands.AutoShardedBot(command_prefix=".")
+intents = discord.Intents.default()
+intents.members = True
+client = commands.AutoShardedBot(command_prefix=".", intents=intents)
 
 # removes the default ".help" command
 client.remove_command("help")
 
+survivors_voice_channel_id = int(0)
+corpses_voice_channel_id = int(0)
+
+# mute時の死亡者部屋のユーザリスト（unmute時に状態復帰させる為の情報格納用）
+# list[discord.Member]
+corpses_list = list()
 
 # sets status when the bot is ready
 @client.event
@@ -15,6 +23,8 @@ async def on_ready():
     activity = discord.Activity(name=".help", type=discord.ActivityType.playing)
     await client.change_presence(status=discord.Status.online, activity=activity)
     print("Ready!")
+    print("生存者部屋:" + client.get_channel(survivors_voice_channel_id).name)
+    print("死亡者部屋:" + client.get_channel(corpses_voice_channel_id).name)
 
 
 @client.event
@@ -101,6 +111,12 @@ async def test(ctx):
 async def mute(ctx):
     command_name = "mute"
     author = ctx.author
+
+    global corpses_list
+    corpses_list.clear()
+    corpses_list = client.get_channel(corpses_voice_channel_id).members
+    for member in corpses_list:
+        await member.edit(mute=True, voice_channel=client.get_channel(survivors_voice_channel_id))
 
     if ctx.guild:  # check if the msg was in a server's text channel
         if author.voice:  # check if the user is in a voice channel
@@ -199,6 +215,11 @@ async def deafen(ctx):
 async def unmute(ctx):
     command_name = "unmute"
     author = ctx.author
+
+    global corpses_list
+    for member in corpses_list:
+        await member.edit(mute=False, voice_channel=client.get_channel(corpses_voice_channel_id))
+    corpses_list.clear()
 
     if ctx.guild:  # check if the msg was in a server's text channel
         if author.voice:  # check if the user is in a voice channel
@@ -571,6 +592,9 @@ async def start(ctx):
 
 # run the bot
 discord_token = str()
-with open("token.json", "r") as token_file:
-    discord_token = json.load(token_file)["token"]
+with open("token_test.json", "r") as token_file:
+    json_contents = json.load(token_file)
+    discord_token               = json_contents["token"]
+    survivors_voice_channel_id  = json_contents["survivors_voice_channel_id"]
+    corpses_voice_channel_id    = json_contents["corpses_voice_channel_id"]
 client.run(discord_token)
