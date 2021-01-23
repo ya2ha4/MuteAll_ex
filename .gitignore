@@ -1,3 +1,4 @@
-TOKEN.txt
-.idea
-test.py
+.venv
+Pipfile.lock
+token.json
+token_test.json

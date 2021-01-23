@@ -1,9 +1,7 @@
 import discord
 from discord.ext import commands
+import json
 import random
-import os
-
-TOKEN = os.environ["TOKEN"]
 
 client = commands.AutoShardedBot(command_prefix=".")
 
@@ -572,4 +570,7 @@ async def start(ctx):
 
 
 # run the bot
-client.run(TOKEN)
+discord_token = str()
+with open("token.json", "r") as token_file:
+    discord_token = json.load(token_file)["token"]
+client.run(discord_token)
