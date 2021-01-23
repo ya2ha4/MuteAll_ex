@@ -5,7 +5,7 @@ import random
 
 intents = discord.Intents.default()
 intents.members = True
-client = commands.AutoShardedBot(command_prefix=".", intents=intents)
+client = commands.Bot(command_prefix=".", intents=intents)
 
 # removes the default ".help" command
 client.remove_command("help")
