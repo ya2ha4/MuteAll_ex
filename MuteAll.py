@@ -108,6 +108,21 @@ async def test(ctx):
                    "3. DM `SCARECOW#0456` on discord. or Join support server (https://discord.gg/8hrhffR6aX)\n")
 
 
+# ミュートのリセット
+@client.command(aliases=["rm"])
+async def reset_mute(ctx):
+    # 全メンバのミュート解除
+    for member in client.get_channel(survivors_voice_channel_id).members:
+        await member.edit(mute=False)
+    for member in client.get_channel(corpses_voice_channel_id).members:
+        await member.edit(mute=False)
+
+    # グローバル変数の初期化
+    global corpses_list, is_muted
+    corpses_list.clear()
+    is_muted = False
+
+
 # mutes everyone in the current voice channel and un-mutes the bots
 @client.command(aliases=["m", "M", "Mute"])
 async def mute(ctx):
