@@ -112,12 +112,6 @@ async def mute(ctx):
     command_name = "mute"
     author = ctx.author
 
-    global corpses_list
-    corpses_list.clear()
-    corpses_list = client.get_channel(corpses_voice_channel_id).members
-    for member in corpses_list:
-        await member.edit(mute=True, voice_channel=client.get_channel(survivors_voice_channel_id))
-
     if ctx.guild:  # check if the msg was in a server's text channel
         if author.voice:  # check if the user is in a voice channel
             if author.guild_permissions.mute_members:  # check if the user has mute members permission
@@ -136,6 +130,11 @@ async def mute(ctx):
                         await ctx.channel.send(f"Muted {no_of_members} user in {author.voice.channel}.")
                     else:
                         await ctx.channel.send(f"Muted {no_of_members} users in {author.voice.channel}.")
+
+                    global corpses_list
+                    for member in corpses_list:
+                        await member.edit(mute=False, voice_channel=client.get_channel(corpses_voice_channel_id))
+                    corpses_list.clear()
 
                 except discord.Forbidden:
                     await ctx.channel.send(  # the bot doesn't have the permission to mute
@@ -216,11 +215,6 @@ async def unmute(ctx):
     command_name = "unmute"
     author = ctx.author
 
-    global corpses_list
-    for member in corpses_list:
-        await member.edit(mute=False, voice_channel=client.get_channel(corpses_voice_channel_id))
-    corpses_list.clear()
-
     if ctx.guild:  # check if the msg was in a server's text channel
         if author.voice:  # check if the user is in a voice channel
             try:
@@ -238,6 +232,11 @@ async def unmute(ctx):
                     await ctx.channel.send(f"Un-muted {no_of_members} user in {author.voice.channel}.")
                 else:
                     await ctx.channel.send(f"Un-muted {no_of_members} users in {author.voice.channel}.")
+
+                global corpses_list
+                corpses_list = client.get_channel(corpses_voice_channel_id).members
+                for member in corpses_list:
+                    await member.edit(mute=True, voice_channel=client.get_channel(survivors_voice_channel_id))
 
             except discord.Forbidden:
                 await ctx.channel.send(  # the bot doesn't have the permission to mute
