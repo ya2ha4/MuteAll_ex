@@ -17,6 +17,8 @@ corpses_voice_channel_id = int(0)
 # list[discord.Member]
 corpses_list = list()
 
+is_muted = False
+
 # sets status when the bot is ready
 @client.event
 async def on_ready():
@@ -112,6 +114,10 @@ async def mute(ctx):
     command_name = "mute"
     author = ctx.author
 
+    global is_muted
+    if is_muted == True:
+        return
+
     if ctx.guild:  # check if the msg was in a server's text channel
         if author.voice:  # check if the user is in a voice channel
             if author.guild_permissions.mute_members:  # check if the user has mute members permission
@@ -135,6 +141,7 @@ async def mute(ctx):
                     for member in corpses_list:
                         await member.edit(mute=False, voice_channel=client.get_channel(corpses_voice_channel_id))
                     corpses_list.clear()
+                    is_muted = True
 
                 except discord.Forbidden:
                     await ctx.channel.send(  # the bot doesn't have the permission to mute
@@ -215,6 +222,10 @@ async def unmute(ctx):
     command_name = "unmute"
     author = ctx.author
 
+    global is_muted
+    if is_muted == False:
+        return
+
     if ctx.guild:  # check if the msg was in a server's text channel
         if author.voice:  # check if the user is in a voice channel
             try:
@@ -237,6 +248,7 @@ async def unmute(ctx):
                 corpses_list = client.get_channel(corpses_voice_channel_id).members
                 for member in corpses_list:
                     await member.edit(mute=True, voice_channel=client.get_channel(survivors_voice_channel_id))
+                is_muted = False
 
             except discord.Forbidden:
                 await ctx.channel.send(  # the bot doesn't have the permission to mute
