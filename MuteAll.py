@@ -117,7 +117,7 @@ async def mute(ctx):
             if author.guild_permissions.mute_members:  # check if the user has mute members permission
                 try:
                     no_of_members = 0
-                    for member in author.voice.channel.members:  # traverse through the members list in current vc
+                    for member in client.get_channel(survivors_voice_channel_id).members:  # traverse through the members list in survivor vc
                         if not member.bot:  # check if member is not a bot
                             await member.edit(mute=True)  # mute the non-bot member
                             no_of_members += 1
@@ -219,7 +219,7 @@ async def unmute(ctx):
         if author.voice:  # check if the user is in a voice channel
             try:
                 no_of_members = 0
-                for member in author.voice.channel.members:  # traverse through the members list in current vc
+                for member in client.get_channel(survivors_voice_channel_id).members:  # traverse through the members list in survivor vc
                     if not member.bot:  # check if member is not a bot
                         await member.edit(mute=False)  # un-mute the non-bot member
                         no_of_members += 1
