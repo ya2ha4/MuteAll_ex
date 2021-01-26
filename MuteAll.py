@@ -123,59 +123,63 @@ async def reset_mute(ctx):
     is_muted = False
 
 
+async def _mute(ctx):
+    global is_muted
+    if is_muted == True:
+        return
+
+    try:
+        survivors_vc = client.get_channel(survivors_voice_channel_id)
+        no_of_members = 0
+        for member in survivors_vc.members:  # traverse through the members list in survivor vc
+            if not member.bot:  # check if member is not a bot
+                await member.edit(mute=True)  # mute the non-bot member
+                no_of_members += 1
+            else:
+                await member.edit(mute=False)  # un-mute the bot member
+                await ctx.send(f"Un-muted {member.name}")
+        if no_of_members == 0:
+            await ctx.channel.send(f"Everyone, please disconnect and reconnect to the Voice Channel again.")
+        elif no_of_members < 2:
+            await ctx.channel.send(f"Muted {no_of_members} user in {survivors_vc}.")
+        else:
+            await ctx.channel.send(f"Muted {no_of_members} users in {survivors_vc}.")
+        corpses_vc = client.get_channel(corpses_voice_channel_id)
+        global corpses_list
+        for member in corpses_list:
+            await member.edit(mute=False, voice_channel=corpses_vc)
+        corpses_list.clear()
+        is_muted = True
+    except discord.Forbidden:
+        await ctx.channel.send(  # the bot doesn't have the permission to mute
+            f"Please make sure I have the `Mute Members` permission in my role **and** in your current "
+            f"voice channel `{author.voice.channel}`.")
+    except discord.HTTPException as e:
+        # # me = client.get_user(187568903084441600)
+        # await me.send(f"{command_name} caused HTTPException: {e}")
+        await ctx.channel.send("Something went wrong. (HTTPException) You can try the following things:\n"
+                               "1. Make everyone disconnect and reconnect to the Voice Channel again.\n"
+                               "2. Give me the 'Administrator' permission.\n"
+                               "3. DM `SCARECOW#0456` on discord.\n")
+    except Exception as e:
+        # me = client.get_user(187568903084441600)
+        # await me.send(f"{command_name} caused other: {e}")
+        await ctx.channel.send("Something went wrong. You can try the following things:\n"
+                               "1. Make everyone disconnect and reconnect to the Voice Channel again.\n"
+                               "2. Give me the 'Administrator' permission.\n"
+                               "3. DM `SCARECOW#0456` on discord.\n")
+
+
 # mutes everyone in the current voice channel and un-mutes the bots
 @client.command(aliases=["m", "M", "Mute"])
 async def mute(ctx):
     command_name = "mute"
     author = ctx.author
 
-    global is_muted
-    if is_muted == True:
-        return
-
     if ctx.guild:  # check if the msg was in a server's text channel
         if author.voice:  # check if the user is in a voice channel
             if author.guild_permissions.mute_members:  # check if the user has mute members permission
-                try:
-                    no_of_members = 0
-                    for member in client.get_channel(survivors_voice_channel_id).members:  # traverse through the members list in survivor vc
-                        if not member.bot:  # check if member is not a bot
-                            await member.edit(mute=True)  # mute the non-bot member
-                            no_of_members += 1
-                        else:
-                            await member.edit(mute=False)  # un-mute the bot member
-                            await ctx.send(f"Un-muted {member.name}")
-                    if no_of_members == 0:
-                        await ctx.channel.send(f"Everyone, please disconnect and reconnect to the Voice Channel again.")
-                    elif no_of_members < 2:
-                        await ctx.channel.send(f"Muted {no_of_members} user in {author.voice.channel}.")
-                    else:
-                        await ctx.channel.send(f"Muted {no_of_members} users in {author.voice.channel}.")
-
-                    global corpses_list
-                    for member in corpses_list:
-                        await member.edit(mute=False, voice_channel=client.get_channel(corpses_voice_channel_id))
-                    corpses_list.clear()
-                    is_muted = True
-
-                except discord.Forbidden:
-                    await ctx.channel.send(  # the bot doesn't have the permission to mute
-                        f"Please make sure I have the `Mute Members` permission in my role **and** in your current "
-                        f"voice channel `{author.voice.channel}`.")
-                except discord.HTTPException as e:
-                    # # me = client.get_user(187568903084441600)
-                    # await me.send(f"{command_name} caused HTTPException: {e}")
-                    await ctx.channel.send("Something went wrong. (HTTPException) You can try the following things:\n"
-                                           "1. Make everyone disconnect and reconnect to the Voice Channel again.\n"
-                                           "2. Give me the 'Administrator' permission.\n"
-                                           "3. DM `SCARECOW#0456` on discord.\n")
-                except Exception as e:
-                    # me = client.get_user(187568903084441600)
-                    # await me.send(f"{command_name} caused other: {e}")
-                    await ctx.channel.send("Something went wrong. You can try the following things:\n"
-                                           "1. Make everyone disconnect and reconnect to the Voice Channel again.\n"
-                                           "2. Give me the 'Administrator' permission.\n"
-                                           "3. DM `SCARECOW#0456` on discord.\n")
+                await _mute(ctx)
             else:
                 await ctx.channel.send("You don't have the `Mute Members` permission.")
         else:
@@ -231,58 +235,61 @@ async def deafen(ctx):
         await ctx.send("This does not work in DMs.")
 
 
+async def _unmute(ctx):
+    global is_muted
+    if is_muted == False:
+        return
+
+    try:
+        survivors_vc = client.get_channel(survivors_voice_channel_id)
+        no_of_members = 0
+        for member in survivors_vc.members:  # traverse through the members list in survivor vc
+            if not member.bot:  # check if member is not a bot
+                await member.edit(mute=False)  # un-mute the non-bot member
+                no_of_members += 1
+            else:
+                await member.edit(mute=True)  # mute the bot member
+                await ctx.send(f"Muted {member.name}")
+        if no_of_members == 0:
+            await ctx.channel.send(f"Everyone, please disconnect and reconnect to the Voice Channel again.")
+        elif no_of_members < 2:
+            await ctx.channel.send(f"Un-muted {no_of_members} user in {survivors_vc}.")
+        else:
+            await ctx.channel.send(f"Un-muted {no_of_members} users in {survivors_vc}.")
+        global corpses_list
+        corpses_list = client.get_channel(corpses_voice_channel_id).members
+        for member in corpses_list:
+            await member.edit(mute=True, voice_channel=survivors_vc)
+        is_muted = False
+    except discord.Forbidden:
+        await ctx.channel.send(  # the bot doesn't have the permission to mute
+            f"Please make sure I have the `Mute Members` permission in my role **and** in your current "
+            f"voice channel `{author.voice.channel}`.")
+    except discord.HTTPException as e:
+        # me = client.get_user(187568903084441600)
+        # await me.send(f"{command_name} caused HTTPException: {e}")
+        await ctx.channel.send("Something went wrong. You can try the following things:\n"
+                               "1. Make everyone disconnect and reconnect to the Voice Channel again.\n"
+                               "2. Give me the 'Administrator' permission.\n"
+                               "3. DM `SCARECOW#0456` on discord.\n")
+    except Exception as e:
+        # me = client.get_user(187568903084441600)
+        # await me.send(f"{command_name} caused other: {e}")
+        await ctx.channel.send("Something went wrong. You can try the following things:\n"
+                               "1. Make everyone disconnect and reconnect to the Voice Channel again.\n"
+                               "2. Give me the 'Administrator' permission.\n"
+                               "3. DM `SCARECOW#0456` on discord.\n")
+    
+
 # un-mutes everyone in the current voice channel and mutes the bots
 @client.command(aliases=["um", "un", "un-mute", "u", "U", "Un", "Um", "Unmute"])
 async def unmute(ctx):
     command_name = "unmute"
     author = ctx.author
 
-    global is_muted
-    if is_muted == False:
-        return
-
     if ctx.guild:  # check if the msg was in a server's text channel
         if author.voice:  # check if the user is in a voice channel
-            try:
-                no_of_members = 0
-                for member in client.get_channel(survivors_voice_channel_id).members:  # traverse through the members list in survivor vc
-                    if not member.bot:  # check if member is not a bot
-                        await member.edit(mute=False)  # un-mute the non-bot member
-                        no_of_members += 1
-                    else:
-                        await member.edit(mute=True)  # mute the bot member
-                        await ctx.send(f"Muted {member.name}")
-                if no_of_members == 0:
-                    await ctx.channel.send(f"Everyone, please disconnect and reconnect to the Voice Channel again.")
-                elif no_of_members < 2:
-                    await ctx.channel.send(f"Un-muted {no_of_members} user in {author.voice.channel}.")
-                else:
-                    await ctx.channel.send(f"Un-muted {no_of_members} users in {author.voice.channel}.")
-
-                global corpses_list
-                corpses_list = client.get_channel(corpses_voice_channel_id).members
-                for member in corpses_list:
-                    await member.edit(mute=True, voice_channel=client.get_channel(survivors_voice_channel_id))
-                is_muted = False
-
-            except discord.Forbidden:
-                await ctx.channel.send(  # the bot doesn't have the permission to mute
-                    f"Please make sure I have the `Mute Members` permission in my role **and** in your current "
-                    f"voice channel `{author.voice.channel}`.")
-            except discord.HTTPException as e:
-                # me = client.get_user(187568903084441600)
-                # await me.send(f"{command_name} caused HTTPException: {e}")
-                await ctx.channel.send("Something went wrong. You can try the following things:\n"
-                                       "1. Make everyone disconnect and reconnect to the Voice Channel again.\n"
-                                       "2. Give me the 'Administrator' permission.\n"
-                                       "3. DM `SCARECOW#0456` on discord.\n")
-            except Exception as e:
-                # me = client.get_user(187568903084441600)
-                # await me.send(f"{command_name} caused other: {e}")
-                await ctx.channel.send("Something went wrong. You can try the following things:\n"
-                                       "1. Make everyone disconnect and reconnect to the Voice Channel again.\n"
-                                       "2. Give me the 'Administrator' permission.\n"
-                                       "3. DM `SCARECOW#0456` on discord.\n")
+            await _unmute(ctx)
         else:
             await ctx.send("You must join a voice channel first.")
     else:
@@ -576,11 +583,13 @@ async def start(ctx):
                         # bot itself, this check is needed so the bot doesn't mute/unmute on reactions to any other
                         # messages
                         if reaction.emoji == "🇲":
-                            await mute_with_reaction(user)
+                            #await mute_with_reaction(user)
+                            await _mute(ctx)
                             await reaction.remove(user)
 
                         elif reaction.emoji == "🇺":
-                            await unmute_with_reaction(user)
+                            #await unmute_with_reaction(user)
+                            await _unmute(ctx)
                             await reaction.remove(user)
 
                         # elif reaction.emoji == "🇪":
