@@ -566,14 +566,18 @@ async def unmute_with_reaction(user):
 async def start(ctx):
     try:
         embed = discord.Embed()
-        embed.add_field(name="React with an emoji below!", value=":regional_indicator_m: is mute, "
-                                                                 ":regional_indicator_u: is unmute", inline=False)
+        embed.add_field(name="リアクションで操作が出来ます",
+                        value=":regional_indicator_m: ミュート\n"
+                              ":regional_indicator_u: ミュート解除\n"
+                              ":regional_indicator_r: リセット（1試合終了ごとに実行して下さい）\n"
+                              ":regional_indicator_e: 終了（メッセージの削除）",
+                              inline=False)
         message = await ctx.send(embed=embed)
 
         await message.add_reaction("🇲")
         await message.add_reaction("🇺")
-
-        # await message.add_reaction("🇪")
+        await message.add_reaction("🇷")
+        await message.add_reaction("🇪")
 
         @client.event
         async def on_reaction_add(reaction, user):
@@ -592,9 +596,12 @@ async def start(ctx):
                             await _unmute(ctx)
                             await reaction.remove(user)
 
-                        # elif reaction.emoji == "🇪":
-                        #     await end_with_reaction(user)
-                        #     await reaction.remove(user)
+                        elif reaction.emoji == "🇷":
+                            await reset_mute(ctx)
+                            await reaction.remove(user)
+
+                        elif reaction.emoji == "🇪":
+                            await message.delete()
 
             except discord.errors.Forbidden:
                 await ctx.send("Make sure I have the following permissions: `Manage Messages`, `Read Message History`, "
