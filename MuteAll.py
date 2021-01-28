@@ -1,8 +1,19 @@
 import discord
 from discord.ext import commands
 import json
+import logging
 import random
 
+
+# logging 設定 ================================
+logging.basicConfig(level=logging.INFO)
+
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
+logging_file_handler = logging.FileHandler(filename="MuteAll_ex.log", encoding="utf-8", mode="w")
+logger.addHandler(logging_file_handler)
+
+# discord_py 設定 ================================
 intents = discord.Intents.default()
 intents.members = True
 client = commands.Bot(command_prefix=".", intents=intents)
@@ -24,9 +35,9 @@ is_muted = False
 async def on_ready():
     activity = discord.Activity(name=".help", type=discord.ActivityType.playing)
     await client.change_presence(status=discord.Status.online, activity=activity)
-    print("Ready!")
-    print("生存者部屋:" + client.get_channel(survivors_voice_channel_id).name)
-    print("死亡者部屋:" + client.get_channel(corpses_voice_channel_id).name)
+    logger.info("Ready!")
+    logger.debug("生存者部屋:" + client.get_channel(survivors_voice_channel_id).name)
+    logger.debug("死亡者部屋:" + client.get_channel(corpses_voice_channel_id).name)
 
 
 @client.event
@@ -97,11 +108,11 @@ async def _mute(ctx):
                 await member.edit(mute=False)  # un-mute the bot member
                 await ctx.send(f"Un-muted {member.name}")
         if no_of_members == 0:
-            await ctx.channel.send(f"Everyone, please disconnect and reconnect to the Voice Channel again.")
+            logger.info(f"Everyone, please disconnect and reconnect to the Voice Channel again.")
         elif no_of_members < 2:
-            await ctx.channel.send(f"Muted {no_of_members} user in {survivors_vc}.")
+            logger.info(f"Muted {no_of_members} user in {survivors_vc}.")
         else:
-            await ctx.channel.send(f"Muted {no_of_members} users in {survivors_vc}.")
+            logger.info(f"Muted {no_of_members} users in {survivors_vc}.")
         corpses_vc = client.get_channel(corpses_voice_channel_id)
         global corpses_list
         for member in corpses_list:
@@ -162,11 +173,11 @@ async def _unmute(ctx):
                 await member.edit(mute=True)  # mute the bot member
                 await ctx.send(f"Muted {member.name}")
         if no_of_members == 0:
-            await ctx.channel.send(f"Everyone, please disconnect and reconnect to the Voice Channel again.")
+            logger.info(f"Everyone, please disconnect and reconnect to the Voice Channel again.")
         elif no_of_members < 2:
-            await ctx.channel.send(f"Un-muted {no_of_members} user in {survivors_vc}.")
+            logger.info(f"Un-muted {no_of_members} user in {survivors_vc}.")
         else:
-            await ctx.channel.send(f"Un-muted {no_of_members} users in {survivors_vc}.")
+            logger.info(f"Un-muted {no_of_members} users in {survivors_vc}.")
         global corpses_list
         corpses_list = client.get_channel(corpses_voice_channel_id).members
         for member in corpses_list:
@@ -221,11 +232,11 @@ async def end(ctx):
                     await member.edit(mute=False)  # un-mute the member
                     no_of_members += 1
                 if no_of_members == 0:
-                    await ctx.channel.send(f"Everyone, please disconnect and reconnect to the Voice Channel again.")
+                    logger.info(f"Everyone, please disconnect and reconnect to the Voice Channel again.")
                 elif no_of_members < 2:
-                    await ctx.channel.send(f"Un-muted {no_of_members} user in {author.voice.channel}.")
+                    logger.info(f"Un-muted {no_of_members} user in {author.voice.channel}.")
                 else:
-                    await ctx.channel.send(f"Un-muted {no_of_members} users in {author.voice.channel}.")
+                    logger.info(f"Un-muted {no_of_members} users in {author.voice.channel}.")
 
             except discord.Forbidden:
                 await ctx.channel.send(  # the bot doesn't have the permission to mute
@@ -367,7 +378,7 @@ async def start(ctx):
 
 # run the bot
 discord_token = str()
-with open("token.json", "r") as token_file:
+with open("token_test.json", "r") as token_file:
     json_contents = json.load(token_file)
     discord_token               = json_contents["token"]
     survivors_voice_channel_id  = json_contents["survivors_voice_channel_id"]
