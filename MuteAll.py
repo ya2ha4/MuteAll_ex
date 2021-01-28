@@ -101,12 +101,12 @@ async def _mute(ctx):
         survivors_vc = client.get_channel(survivors_voice_channel_id)
         no_of_members = 0
         for member in survivors_vc.members:  # traverse through the members list in survivor vc
-            if not member.bot:  # check if member is not a bot
-                await member.edit(mute=True)  # mute the non-bot member
+            if not member.bot and not member.voice.self_mute:  # ボットでなく、ミュートにしていないメンバのみミュート
+                await member.edit(mute=True)
                 no_of_members += 1
             else:
-                await member.edit(mute=False)  # un-mute the bot member
-                await ctx.send(f"Un-muted {member.name}")
+                await member.edit(mute=False)
+                logger.debug(f"Un-muted {member.name}")
         if no_of_members == 0:
             logger.info(f"Everyone, please disconnect and reconnect to the Voice Channel again.")
         elif no_of_members < 2:
