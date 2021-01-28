@@ -40,9 +40,9 @@ async def on_guild_join(guild):
 
 
 # shows latency of the bot
-@client.command(aliases=["latency"])
-async def ping(ctx):
-    #await ctx.send(f"{round(client.latency * 1000)} ms")
+#@client.command(aliases=["latency"])
+#async def ping(ctx):
+#    await ctx.send(f"{round(client.latency * 1000)} ms")
 
 
 # shows help text
@@ -367,7 +367,7 @@ async def start(ctx):
 
 # run the bot
 discord_token = str()
-with open("token_test.json", "r") as token_file:
+with open("token.json", "r") as token_file:
     json_contents = json.load(token_file)
     discord_token               = json_contents["token"]
     survivors_voice_channel_id  = json_contents["survivors_voice_channel_id"]
