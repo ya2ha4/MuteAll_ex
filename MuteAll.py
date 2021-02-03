@@ -3,6 +3,7 @@ from discord.ext import commands
 import json
 import logging
 import random
+import threading
 
 
 # logging 設定 ================================
@@ -12,6 +13,7 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 logging_file_handler = logging.FileHandler(filename="MuteAll_ex.log", encoding="utf-8", mode="w")
 logger.addHandler(logging_file_handler)
+
 
 # discord_py 設定 ================================
 intents = discord.Intents.default()
@@ -24,11 +26,15 @@ client.remove_command("help")
 survivors_voice_channel_id = int(0)
 corpses_voice_channel_id = int(0)
 
+
+# グローバル変数設定 ================================
 # mute時の死亡者部屋のユーザリスト（unmute時に状態復帰させる為の情報格納用）
 # list[discord.Member]
 corpses_list = list()
 
 is_muted = False
+mute_lock = threading.Lock()
+
 
 # sets status when the bot is ready
 @client.event
@@ -80,6 +86,9 @@ async def help(ctx):
 # ミュートのリセット
 @client.command(aliases=["rm"])
 async def reset_mute(ctx):
+    global mute_lock
+    mute_lock.acquire()
+
     # 全メンバのミュート解除
     for member in client.get_channel(survivors_voice_channel_id).members:
         await member.edit(mute=False)
@@ -91,10 +100,14 @@ async def reset_mute(ctx):
     corpses_list.clear()
     is_muted = False
 
+    mute_lock.release()
+
 
 async def _mute(ctx):
-    global is_muted
+    global is_muted, mute_lock
+    mute_lock.acquire()
     if is_muted == True:
+        mute_lock.release()
         return
 
     try:
@@ -138,6 +151,8 @@ async def _mute(ctx):
                                "2. Give me the 'Administrator' permission.\n"
                                "3. DM `SCARECOW#0456` on discord.\n")
 
+    mute_lock.release()
+
 
 # mutes everyone in the current voice channel and un-mutes the bots
 @client.command(aliases=["m", "M", "Mute"])
@@ -158,8 +173,10 @@ async def mute(ctx):
 
 
 async def _unmute(ctx):
-    global is_muted
+    global is_muted, mute_lock
+    mute_lock.acquire()
     if is_muted == False:
+        mute_lock.release()
         return
 
     try:
@@ -201,7 +218,9 @@ async def _unmute(ctx):
                                "1. Make everyone disconnect and reconnect to the Voice Channel again.\n"
                                "2. Give me the 'Administrator' permission.\n"
                                "3. DM `SCARECOW#0456` on discord.\n")
-    
+
+    mute_lock.release()
+
 
 # un-mutes everyone in the current voice channel and mutes the bots
 @client.command(aliases=["um", "un", "un-mute", "u", "U", "Un", "Um", "Unmute"])
