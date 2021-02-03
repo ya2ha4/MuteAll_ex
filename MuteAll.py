@@ -395,6 +395,13 @@ async def start(ctx):
                                f"happening. OR use the normal `.mute` and `.unmute`")
 
 
+@client.event
+async def on_voice_state_update(member, before, after):
+    # Mute前に死亡者部屋へ移動出来なかった人のミュートを解除
+    if after.channel == client.get_channel(corpses_voice_channel_id):
+        await member.edit(mute=False)
+
+
 # run the bot
 discord_token = str()
 with open("token_test.json", "r") as token_file:
