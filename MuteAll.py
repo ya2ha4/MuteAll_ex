@@ -88,6 +88,7 @@ async def help(ctx):
 async def reset_mute(ctx):
     global mute_lock
     mute_lock.acquire()
+    logger.debug(f"[reset_mute] lock.")
 
     # 全メンバのミュート解除
     for member in client.get_channel(survivors_voice_channel_id).members:
@@ -100,13 +101,16 @@ async def reset_mute(ctx):
     corpses_list.clear()
     is_muted = False
 
+    logger.debug(f"[reset_mute] unlock.")
     mute_lock.release()
 
 
 async def _mute(ctx):
     global is_muted, mute_lock
     mute_lock.acquire()
+    logger.debug(f"[_mute] lock.")
     if is_muted == True:
+        logger.debug(f"[_mute] unlock.")
         mute_lock.release()
         return
 
@@ -116,6 +120,7 @@ async def _mute(ctx):
         for member in survivors_vc.members:  # traverse through the members list in survivor vc
             if not member.bot and not member.voice.self_mute:  # ボットでなく、ミュートにしていないメンバのみミュート
                 await member.edit(mute=True)
+                logger.debug(f"[_mute] mute {member.name}.")
                 no_of_members += 1
             else:
                 await member.edit(mute=False)
@@ -130,6 +135,7 @@ async def _mute(ctx):
         global corpses_list
         for member in corpses_list:
             await member.edit(mute=False, voice_channel=corpses_vc)
+            logger.debug(f"[_mute]   corpses_member {member.name}.")
         corpses_list.clear()
         is_muted = True
     except discord.Forbidden:
@@ -151,6 +157,7 @@ async def _mute(ctx):
                                "2. Give me the 'Administrator' permission.\n"
                                "3. DM `SCARECOW#0456` on discord.\n")
 
+    logger.debug(f"[_mute] unlock.")
     mute_lock.release()
 
 
@@ -175,7 +182,9 @@ async def mute(ctx):
 async def _unmute(ctx):
     global is_muted, mute_lock
     mute_lock.acquire()
+    logger.debug(f"[_unmute] lock.")
     if is_muted == False:
+        logger.debug(f"[_unmute] unlock.")
         mute_lock.release()
         return
 
@@ -185,6 +194,7 @@ async def _unmute(ctx):
         for member in survivors_vc.members:  # traverse through the members list in survivor vc
             if not member.bot:  # check if member is not a bot
                 await member.edit(mute=False)  # un-mute the non-bot member
+                logger.debug(f"[_unmute] unmute {member.name}.")
                 no_of_members += 1
             else:
                 await member.edit(mute=True)  # mute the bot member
@@ -199,6 +209,7 @@ async def _unmute(ctx):
         corpses_list = client.get_channel(corpses_voice_channel_id).members
         for member in corpses_list:
             await member.edit(mute=True, voice_channel=survivors_vc)
+            logger.debug(f"[_unmute]   corpses_member {member.name}.")
         is_muted = False
     except discord.Forbidden:
         await ctx.channel.send(  # the bot doesn't have the permission to mute
@@ -219,6 +230,7 @@ async def _unmute(ctx):
                                "2. Give me the 'Administrator' permission.\n"
                                "3. DM `SCARECOW#0456` on discord.\n")
 
+    logger.debug(f"[_unmute] unlock.")
     mute_lock.release()
 
 
@@ -400,6 +412,7 @@ async def on_voice_state_update(member, before, after):
     # Mute前に死亡者部屋へ移動出来なかった人のミュートを解除
     if after.channel == client.get_channel(corpses_voice_channel_id):
         await member.edit(mute=False)
+        logger.debug(f"[on_voice_state_update] unmute {member.name}.")
 
 
 # run the bot
