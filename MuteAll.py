@@ -410,7 +410,7 @@ async def start(ctx):
 @client.event
 async def on_voice_state_update(member, before, after):
     # Mute前に死亡者部屋へ移動出来なかった人のミュートを解除
-    if after.channel == client.get_channel(corpses_voice_channel_id):
+    if after.channel == client.get_channel(corpses_voice_channel_id) and member.voice.mute == True:
         await member.edit(mute=False)
         logger.debug(f"[on_voice_state_update] unmute {member.name}.")
 
