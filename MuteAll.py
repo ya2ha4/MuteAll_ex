@@ -1,9 +1,9 @@
+import asyncio
 import discord
 from discord.ext import commands
 import json
 import logging
 import random
-import threading
 
 
 # logging 設定 ================================
@@ -33,7 +33,7 @@ corpses_voice_channel_id = int(0)
 corpses_list = list()
 
 is_muted = False
-mute_lock = threading.Lock()
+mute_lock = asyncio.Lock()
 
 
 # sets status when the bot is ready
@@ -87,78 +87,75 @@ async def help(ctx):
 @client.command(aliases=["rm"])
 async def reset_mute(ctx):
     global mute_lock
-    mute_lock.acquire()
-    logger.debug(f"[reset_mute] lock.")
+    async with mute_lock:
+        logger.debug(f"[reset_mute] lock.")
 
-    # 全メンバのミュート解除
-    for member in client.get_channel(survivors_voice_channel_id).members:
-        await member.edit(mute=False)
-    for member in client.get_channel(corpses_voice_channel_id).members:
-        await member.edit(mute=False)
+        # 全メンバのミュート解除
+        for member in client.get_channel(survivors_voice_channel_id).members:
+            await member.edit(mute=False)
+        for member in client.get_channel(corpses_voice_channel_id).members:
+            await member.edit(mute=False)
 
-    # グローバル変数の初期化
-    global corpses_list, is_muted
-    corpses_list.clear()
-    is_muted = False
+        # グローバル変数の初期化
+        global corpses_list, is_muted
+        corpses_list.clear()
+        is_muted = False
 
-    logger.debug(f"[reset_mute] unlock.")
-    mute_lock.release()
+        logger.debug(f"[reset_mute] unlock.")
 
 
 async def _mute(ctx):
     global is_muted, mute_lock
-    mute_lock.acquire()
-    logger.debug(f"[_mute] lock.")
-    if is_muted == True:
-        logger.debug(f"[_mute] unlock.")
-        mute_lock.release()
-        return
+    async with mute_lock:
+        logger.debug(f"[_mute] lock.")
+        if is_muted == True:
+            logger.debug(f"[_mute] unlock.")
+            return
 
-    try:
-        survivors_vc = client.get_channel(survivors_voice_channel_id)
-        no_of_members = 0
-        for member in survivors_vc.members:  # traverse through the members list in survivor vc
-            if not member.bot and not member.voice.self_mute:  # ボットでなく、ミュートにしていないメンバのみミュート
-                await member.edit(mute=True)
-                logger.debug(f"[_mute] mute {member.name}.")
-                no_of_members += 1
+        try:
+            survivors_vc = client.get_channel(survivors_voice_channel_id)
+            no_of_members = 0
+            for member in survivors_vc.members:  # traverse through the members list in survivor vc
+                if not member.bot and not member.voice.self_mute:  # ボットでなく、ミュートにしていないメンバのみミュート
+                    await member.edit(mute=True)
+                    logger.debug(f"[_mute] mute {member.name}.")
+                    no_of_members += 1
+                else:
+                    await member.edit(mute=False)
+                    logger.debug(f"Un-muted {member.name}")
+            if no_of_members == 0:
+                logger.info(f"Everyone, please disconnect and reconnect to the Voice Channel again.")
+            elif no_of_members < 2:
+                logger.info(f"Muted {no_of_members} user in {survivors_vc}.")
             else:
-                await member.edit(mute=False)
-                logger.debug(f"Un-muted {member.name}")
-        if no_of_members == 0:
-            logger.info(f"Everyone, please disconnect and reconnect to the Voice Channel again.")
-        elif no_of_members < 2:
-            logger.info(f"Muted {no_of_members} user in {survivors_vc}.")
-        else:
-            logger.info(f"Muted {no_of_members} users in {survivors_vc}.")
-        corpses_vc = client.get_channel(corpses_voice_channel_id)
-        global corpses_list
-        for member in corpses_list:
-            await member.edit(mute=False, voice_channel=corpses_vc)
-            logger.debug(f"[_mute]   corpses_member {member.name}.")
-        corpses_list.clear()
-        is_muted = True
-    except discord.Forbidden:
-        await ctx.channel.send(  # the bot doesn't have the permission to mute
-            f"Please make sure I have the `Mute Members` permission in my role **and** in your current "
-            f"voice channel `{author.voice.channel}`.")
-    except discord.HTTPException as e:
-        # # me = client.get_user(187568903084441600)
-        # await me.send(f"{command_name} caused HTTPException: {e}")
-        await ctx.channel.send("Something went wrong. (HTTPException) You can try the following things:\n"
-                               "1. Make everyone disconnect and reconnect to the Voice Channel again.\n"
-                               "2. Give me the 'Administrator' permission.\n"
-                               "3. DM `SCARECOW#0456` on discord.\n")
-    except Exception as e:
-        # me = client.get_user(187568903084441600)
-        # await me.send(f"{command_name} caused other: {e}")
-        await ctx.channel.send("Something went wrong. You can try the following things:\n"
-                               "1. Make everyone disconnect and reconnect to the Voice Channel again.\n"
-                               "2. Give me the 'Administrator' permission.\n"
-                               "3. DM `SCARECOW#0456` on discord.\n")
+                logger.info(f"Muted {no_of_members} users in {survivors_vc}.")
+            corpses_vc = client.get_channel(corpses_voice_channel_id)
+            global corpses_list
+            for member in corpses_list:
+                await member.edit(mute=False, voice_channel=corpses_vc)
+                logger.debug(f"[_mute]   corpses_member {member.name}.")
+            corpses_list.clear()
+            is_muted = True
+        except discord.Forbidden:
+            await ctx.channel.send(  # the bot doesn't have the permission to mute
+                f"Please make sure I have the `Mute Members` permission in my role **and** in your current "
+                f"voice channel `{author.voice.channel}`.")
+        except discord.HTTPException as e:
+            # # me = client.get_user(187568903084441600)
+            # await me.send(f"{command_name} caused HTTPException: {e}")
+            await ctx.channel.send("Something went wrong. (HTTPException) You can try the following things:\n"
+                                   "1. Make everyone disconnect and reconnect to the Voice Channel again.\n"
+                                   "2. Give me the 'Administrator' permission.\n"
+                                   "3. DM `SCARECOW#0456` on discord.\n")
+        except Exception as e:
+            # me = client.get_user(187568903084441600)
+            # await me.send(f"{command_name} caused other: {e}")
+            await ctx.channel.send("Something went wrong. You can try the following things:\n"
+                                   "1. Make everyone disconnect and reconnect to the Voice Channel again.\n"
+                                   "2. Give me the 'Administrator' permission.\n"
+                                   "3. DM `SCARECOW#0456` on discord.\n")
 
-    logger.debug(f"[_mute] unlock.")
-    mute_lock.release()
+        logger.debug(f"[_mute] unlock.")
 
 
 # mutes everyone in the current voice channel and un-mutes the bots
@@ -181,57 +178,55 @@ async def mute(ctx):
 
 async def _unmute(ctx):
     global is_muted, mute_lock
-    mute_lock.acquire()
-    logger.debug(f"[_unmute] lock.")
-    if is_muted == False:
-        logger.debug(f"[_unmute] unlock.")
-        mute_lock.release()
-        return
+    async with mute_lock:
+        logger.debug(f"[_unmute] lock.")
+        if is_muted == False:
+            logger.debug(f"[_unmute] unlock.")
+            return
 
-    try:
-        survivors_vc = client.get_channel(survivors_voice_channel_id)
-        no_of_members = 0
-        for member in survivors_vc.members:  # traverse through the members list in survivor vc
-            if not member.bot:  # check if member is not a bot
-                await member.edit(mute=False)  # un-mute the non-bot member
-                logger.debug(f"[_unmute] unmute {member.name}.")
-                no_of_members += 1
+        try:
+            survivors_vc = client.get_channel(survivors_voice_channel_id)
+            no_of_members = 0
+            for member in survivors_vc.members:  # traverse through the members list in survivor vc
+                if not member.bot:  # check if member is not a bot
+                    await member.edit(mute=False)  # un-mute the non-bot member
+                    logger.debug(f"[_unmute] unmute {member.name}.")
+                    no_of_members += 1
+                else:
+                    await member.edit(mute=True)  # mute the bot member
+                    await ctx.send(f"Muted {member.name}")
+            if no_of_members == 0:
+                logger.info(f"Everyone, please disconnect and reconnect to the Voice Channel again.")
+            elif no_of_members < 2:
+                logger.info(f"Un-muted {no_of_members} user in {survivors_vc}.")
             else:
-                await member.edit(mute=True)  # mute the bot member
-                await ctx.send(f"Muted {member.name}")
-        if no_of_members == 0:
-            logger.info(f"Everyone, please disconnect and reconnect to the Voice Channel again.")
-        elif no_of_members < 2:
-            logger.info(f"Un-muted {no_of_members} user in {survivors_vc}.")
-        else:
-            logger.info(f"Un-muted {no_of_members} users in {survivors_vc}.")
-        global corpses_list
-        corpses_list = client.get_channel(corpses_voice_channel_id).members
-        for member in corpses_list:
-            await member.edit(mute=True, voice_channel=survivors_vc)
-            logger.debug(f"[_unmute]   corpses_member {member.name}.")
-        is_muted = False
-    except discord.Forbidden:
-        await ctx.channel.send(  # the bot doesn't have the permission to mute
-            f"Please make sure I have the `Mute Members` permission in my role **and** in your current "
-            f"voice channel `{author.voice.channel}`.")
-    except discord.HTTPException as e:
-        # me = client.get_user(187568903084441600)
-        # await me.send(f"{command_name} caused HTTPException: {e}")
-        await ctx.channel.send("Something went wrong. You can try the following things:\n"
-                               "1. Make everyone disconnect and reconnect to the Voice Channel again.\n"
-                               "2. Give me the 'Administrator' permission.\n"
-                               "3. DM `SCARECOW#0456` on discord.\n")
-    except Exception as e:
-        # me = client.get_user(187568903084441600)
-        # await me.send(f"{command_name} caused other: {e}")
-        await ctx.channel.send("Something went wrong. You can try the following things:\n"
-                               "1. Make everyone disconnect and reconnect to the Voice Channel again.\n"
-                               "2. Give me the 'Administrator' permission.\n"
-                               "3. DM `SCARECOW#0456` on discord.\n")
+                logger.info(f"Un-muted {no_of_members} users in {survivors_vc}.")
+            global corpses_list
+            corpses_list = client.get_channel(corpses_voice_channel_id).members
+            for member in corpses_list:
+                await member.edit(mute=True, voice_channel=survivors_vc)
+                logger.debug(f"[_unmute]   corpses_member {member.name}.")
+            is_muted = False
+        except discord.Forbidden:
+            await ctx.channel.send(  # the bot doesn't have the permission to mute
+                f"Please make sure I have the `Mute Members` permission in my role **and** in your current "
+                f"voice channel `{author.voice.channel}`.")
+        except discord.HTTPException as e:
+            # me = client.get_user(187568903084441600)
+            # await me.send(f"{command_name} caused HTTPException: {e}")
+            await ctx.channel.send("Something went wrong. You can try the following things:\n"
+                                   "1. Make everyone disconnect and reconnect to the Voice Channel again.\n"
+                                   "2. Give me the 'Administrator' permission.\n"
+                                   "3. DM `SCARECOW#0456` on discord.\n")
+        except Exception as e:
+            # me = client.get_user(187568903084441600)
+            # await me.send(f"{command_name} caused other: {e}")
+            await ctx.channel.send("Something went wrong. You can try the following things:\n"
+                                   "1. Make everyone disconnect and reconnect to the Voice Channel again.\n"
+                                   "2. Give me the 'Administrator' permission.\n"
+                                   "3. DM `SCARECOW#0456` on discord.\n")
 
-    logger.debug(f"[_unmute] unlock.")
-    mute_lock.release()
+        logger.debug(f"[_unmute] unlock.")
 
 
 # un-mutes everyone in the current voice channel and mutes the bots
