@@ -32,6 +32,10 @@ corpses_voice_channel_id = int(0)
 # list[discord.Member]
 corpses_list = list()
 
+# startコマンドで生成するミュート操作用のメッセージ
+# discord.Message
+mute_control_mes = None
+
 is_muted = False
 mute_lock = asyncio.Lock()
 
@@ -88,6 +92,7 @@ async def help(ctx):
 async def reset_mute(ctx):
     global mute_lock
     async with mute_lock:
+        await disp_state(content="初期化中")
         logger.debug(f"[reset_mute] lock.")
 
         # 全メンバのミュート解除
@@ -101,6 +106,7 @@ async def reset_mute(ctx):
         corpses_list.clear()
         is_muted = False
 
+        await disp_state(content="準備OK!")
         logger.debug(f"[reset_mute] unlock.")
 
 
@@ -112,6 +118,7 @@ async def _mute(ctx):
             logger.debug(f"[_mute] unlock.")
             return
 
+        await disp_state(content="ミュート処理中")
         try:
             survivors_vc = client.get_channel(survivors_voice_channel_id)
             no_of_members = 0
@@ -155,6 +162,7 @@ async def _mute(ctx):
                                    "2. Give me the 'Administrator' permission.\n"
                                    "3. DM `SCARECOW#0456` on discord.\n")
 
+        await disp_state(content="ミュート!")
         logger.debug(f"[_mute] unlock.")
 
 
@@ -184,6 +192,7 @@ async def _unmute(ctx):
             logger.debug(f"[_unmute] unlock.")
             return
 
+        await disp_state(content="ミュート解除処理中")
         try:
             survivors_vc = client.get_channel(survivors_voice_channel_id)
             no_of_members = 0
@@ -226,6 +235,7 @@ async def _unmute(ctx):
                                    "2. Give me the 'Administrator' permission.\n"
                                    "3. DM `SCARECOW#0456` on discord.\n")
 
+        await disp_state(content="ミュート解除!")
         logger.debug(f"[_unmute] unlock.")
 
 
@@ -342,7 +352,9 @@ async def start(ctx):
                               ":regional_indicator_r: リセット（1試合終了ごとに実行して下さい）\n"
                               ":regional_indicator_e: 終了（メッセージの削除）",
                               inline=False)
-        message = await ctx.send(embed=embed)
+        global mute_control_mes
+        message = await ctx.send(content="準備OK!", embed=embed)
+        mute_control_mes = message
 
         await message.add_reaction("🇲")
         await message.add_reaction("🇺")
@@ -371,6 +383,7 @@ async def start(ctx):
                             await reaction.remove(user)
 
                         elif reaction.emoji == "🇪":
+                            mute_control_mes = None
                             await message.delete()
 
             except discord.errors.Forbidden:
@@ -408,6 +421,11 @@ async def on_voice_state_update(member, before, after):
     if after.channel == client.get_channel(corpses_voice_channel_id) and member.voice.mute == True:
         await member.edit(mute=False)
         logger.debug(f"[on_voice_state_update] unmute {member.name}.")
+
+
+async def disp_state(content):
+    if mute_control_mes is not None:
+        await mute_control_mes.edit(content=content)
 
 
 # run the bot
