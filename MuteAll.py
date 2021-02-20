@@ -98,8 +98,9 @@ async def reset_mute(ctx):
         # 全メンバのミュート解除
         for member in client.get_channel(survivors_voice_channel_id).members:
             await member.edit(mute=False)
+        survivors_vc = client.get_channel(survivors_voice_channel_id)
         for member in client.get_channel(corpses_voice_channel_id).members:
-            await member.edit(mute=False)
+            await member.edit(mute=False, voice_channel=survivors_vc)
 
         # グローバル変数の初期化
         global corpses_list, is_muted
