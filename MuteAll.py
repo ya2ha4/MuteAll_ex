@@ -123,11 +123,15 @@ async def _mute(ctx):
         try:
             survivors_vc = client.get_channel(survivors_voice_channel_id)
             no_of_members = 0
+            global corpses_list
             for member in survivors_vc.members:  # traverse through the members list in survivor vc
                 if not member.bot and not member.voice.self_mute:  # ボットでなく、ミュートにしていないメンバのみミュート
                     await member.edit(mute=True)
                     logger.debug(f"[_mute] mute {member.name}.")
                     no_of_members += 1
+                elif not member.bot and member.voice.self_mute: # ミュートにしているので死亡者部屋のメンバに追加
+                    corpses_list.append(member)
+                    logger.debug(f"[_mute] add corpses_list {member.name}.")
                 else:
                     await member.edit(mute=False)
                     logger.debug(f"Un-muted {member.name}")
@@ -138,7 +142,6 @@ async def _mute(ctx):
             else:
                 logger.info(f"Muted {no_of_members} users in {survivors_vc}.")
             corpses_vc = client.get_channel(corpses_voice_channel_id)
-            global corpses_list
             for member in corpses_list:
                 await member.edit(mute=False, voice_channel=corpses_vc)
                 logger.debug(f"[_mute]   corpses_member {member.name}.")
