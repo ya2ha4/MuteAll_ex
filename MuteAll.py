@@ -73,16 +73,15 @@ async def help(ctx):
 
     embed.set_author(name="Available Commands")
 
-    embed.add_field(name="`.mute` / `.m`", value="Mute humans and un-mute bots in your current voice channel.",
+    embed.add_field(name="`.start` / `.s`",
+                    value="エモーションでミュート制御できるメッセージを作成．\n"
+                          "制御方法は生成されたメッセージを確認して下さい．\n"
+                          "ボットを再起動すると再起動前に生成したメッセージで制御できなくなります．",
                     inline=False)
 
-    embed.add_field(name="`.unmute` / `.u`", value="Un-mute humans and mute bots in your current voice channel.",
+    embed.add_field(name="`.end` / `.e`",
+                    value=".start, .s にて作成したメッセージの削除",
                     inline=False)
-
-    embed.add_field(name="`.start` / `.s`", value="[BETA] React with emojies to mute or unmute, no need to type "
-                                                  "anymore! ", inline=False)
-
-    embed.add_field(name="`.end` / `.e`", value="End the game, un-mute everyone (including bots)", inline=False)
 
     await ctx.send(embed=embed)
 
