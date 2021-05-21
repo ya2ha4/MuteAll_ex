@@ -54,9 +54,9 @@ async def on_ready():
 async def on_guild_join(guild):
     for channel in guild.text_channels:
         if channel.permissions_for(guild.me).send_messages:
-            await channel.send("Hey, thanks for adding me! If you are already in a voice channel, please make "
-                               "everyone disconnect and reconnect so I can work properly. Type `.help` to view all "
-                               "the commands.")
+            await channel.send("サーバに Mute_ex ボットが導入されました\n"
+                               ".s と入力するとミュート/ミュート解除を制御する為のメッセージを作ることができます\n"
+                               "使い方は .help でヘルプを参照下さい\n")
             break
 
 
@@ -147,24 +147,22 @@ async def _mute(ctx):
                 logger.debug(f"[_mute]   corpses_member {member.name}.")
             corpses_list.clear()
             is_muted = True
+
         except discord.Forbidden:
             await ctx.channel.send(  # the bot doesn't have the permission to mute
-                f"Please make sure I have the `Mute Members` permission in my role **and** in your current "
-                f"voice channel `{author.voice.channel}`.")
+                f"ミュート操作の権限がありません\n"
+                f"ボットアカウントに「管理者」か「メンバーをミュート」の権限を付与して下さい\n")
+
         except discord.HTTPException as e:
-            # # me = client.get_user(187568903084441600)
-            # await me.send(f"{command_name} caused HTTPException: {e}")
-            await ctx.channel.send("Something went wrong. (HTTPException) You can try the following things:\n"
-                                   "1. Make everyone disconnect and reconnect to the Voice Channel again.\n"
-                                   "2. Give me the 'Administrator' permission.\n"
-                                   "3. DM `SCARECOW#0456` on discord.\n")
+            logger.warning(f"[_mute] caused HTTPException: {e}")
+            await ctx.channel.send("処理が途中で失敗しました (HTTPException) \n"
+                                   "・試合中なら全員セルフミュートで対応して下さい\n"
+                                   "・次の会議で🇷でリセットして死亡者は改めてセルフミュートして下さい\n")
         except Exception as e:
-            # me = client.get_user(187568903084441600)
-            # await me.send(f"{command_name} caused other: {e}")
-            await ctx.channel.send("Something went wrong. You can try the following things:\n"
-                                   "1. Make everyone disconnect and reconnect to the Voice Channel again.\n"
-                                   "2. Give me the 'Administrator' permission.\n"
-                                   "3. DM `SCARECOW#0456` on discord.\n")
+            logger.warning(f"[_mute] caused other: {e}")
+            await ctx.channel.send("処理が途中で失敗しました\n"
+                                   "・試合中なら全員セルフミュートで対応して下さい\n"
+                                   "・次の会議で🇷でリセットして死亡者は改めてセルフミュートして下さい\n")
 
         await disp_state(content="ミュート!")
         logger.debug(f"[_mute] unlock.")
@@ -181,11 +179,11 @@ async def mute(ctx):
             if author.guild_permissions.mute_members:  # check if the user has mute members permission
                 await _mute(ctx)
             else:
-                await ctx.channel.send("You don't have the `Mute Members` permission.")
+                await ctx.channel.send("ミュート権限がありません。")
         else:
-            await ctx.send("You must join a voice channel first.")
+            await ctx.send("ボット利用するにはボイスチャンネルに参加して下さい")
     else:
-        await ctx.send("This does not work in DMs.")
+        await ctx.send("コマンドはテキストチャンネルにて実行して下さい")
 
 
 async def _unmute(ctx):
@@ -220,24 +218,23 @@ async def _unmute(ctx):
                 await member.edit(mute=True, voice_channel=survivors_vc)
                 logger.debug(f"[_unmute]   corpses_member {member.name}.")
             is_muted = False
+
         except discord.Forbidden:
             await ctx.channel.send(  # the bot doesn't have the permission to mute
-                f"Please make sure I have the `Mute Members` permission in my role **and** in your current "
-                f"voice channel `{author.voice.channel}`.")
+                f"ミュート操作の権限がありません\n"
+                f"ボットアカウントに「管理者」か「メンバーをミュート」の権限を付与して下さい\n")
+
         except discord.HTTPException as e:
-            # me = client.get_user(187568903084441600)
-            # await me.send(f"{command_name} caused HTTPException: {e}")
-            await ctx.channel.send("Something went wrong. You can try the following things:\n"
-                                   "1. Make everyone disconnect and reconnect to the Voice Channel again.\n"
-                                   "2. Give me the 'Administrator' permission.\n"
-                                   "3. DM `SCARECOW#0456` on discord.\n")
+            logger.warning(f"[_mute] caused HTTPException: {e}")
+            await ctx.channel.send("処理が途中で失敗しました (HTTPException) \n"
+                                   "・試合中なら全員セルフミュートで対応して下さい\n"
+                                   "・次の会議で🇷でリセットして死亡者は改めてセルフミュートして下さい\n")
+
         except Exception as e:
-            # me = client.get_user(187568903084441600)
-            # await me.send(f"{command_name} caused other: {e}")
-            await ctx.channel.send("Something went wrong. You can try the following things:\n"
-                                   "1. Make everyone disconnect and reconnect to the Voice Channel again.\n"
-                                   "2. Give me the 'Administrator' permission.\n"
-                                   "3. DM `SCARECOW#0456` on discord.\n")
+            logger.warning(f"[_mute] caused other: {e}")
+            await ctx.channel.send("処理が途中で失敗しました\n"
+                                   "・試合中なら全員セルフミュートで対応して下さい\n"
+                                   "・次の会議で🇷でリセットして死亡者は改めてセルフミュートして下さい\n")
 
         await disp_state(content="ミュート解除!")
         logger.debug(f"[_unmute] unlock.")
@@ -253,9 +250,9 @@ async def unmute(ctx):
         if author.voice:  # check if the user is in a voice channel
             await _unmute(ctx)
         else:
-            await ctx.send("You must join a voice channel first.")
+            await ctx.send("ボット利用するにはボイスチャンネルに参加して下さい")
     else:
-        await ctx.send("This does not work in DMs.")
+        await ctx.send("コマンドはテキストチャンネルにて実行して下さい")
 
 
 # end the game and un-mute everyone including bots
@@ -280,26 +277,24 @@ async def end(ctx):
 
             except discord.Forbidden:
                 await ctx.channel.send(  # the bot doesn't have the permission to mute
-                    f"Please make sure I have the `Mute Members` permission in my role **and** in your current "
-                    f"voice channel `{author.voice.channel}`.")
+                    f"ミュート操作の権限がありません\n"
+                    f"ボットアカウントに「管理者」か「メンバーをミュート」の権限を付与して下さい\n")
+
             except discord.HTTPException as e:
-                # me = client.get_user(187568903084441600)
-                # await me.send(f"{command_name} caused HTTPException: {e}")
-                await ctx.channel.send("Something went wrong. You can try the following things:\n"
-                                       "1. Make everyone disconnect and reconnect to the Voice Channel again.\n"
-                                       "2. Give me the 'Administrator' permission.\n"
-                                       "3. DM `SCARECOW#0456` on discord.\n")
+                logger.warning(f"[_mute] caused HTTPException: {e}")
+                await ctx.channel.send("処理が途中で失敗しました (HTTPException) \n"
+                                       "・試合中なら全員セルフミュートで対応して下さい\n"
+                                       "・次の会議で🇷でリセットして死亡者は改めてセルフミュートして下さい\n")
+
             except Exception as e:
-                # me = client.get_user(187568903084441600)
-                # await me.send(f"{command_name} caused other: {e}")
-                await ctx.channel.send("Something went wrong. You can try the following things:\n"
-                                       "1. Make everyone disconnect and reconnect to the Voice Channel again.\n"
-                                       "2. Give me the 'Administrator' permission.\n"
-                                       "3. DM `SCARECOW#0456` on discord.\n")
+                logger.warning(f"[_mute] caused other: {e}")
+                await ctx.channel.send("処理が途中で失敗しました\n"
+                                       "・試合中なら全員セルフミュートで対応して下さい\n"
+                                       "・次の会議で🇷でリセットして死亡者は改めてセルフミュートして下さい\n")
         else:
-            await ctx.send("You must join a voice channel first.")
+            await ctx.send("ボット利用するにはボイスチャンネルに参加して下さい")
     else:
-        await ctx.send("This does not work in DMs.")
+        await ctx.send("コマンドはテキストチャンネルにて実行して下さい")
 
 
 async def mute_with_reaction(user):
@@ -314,8 +309,6 @@ async def mute_with_reaction(user):
                         await member.edit(mute=False)  # un-mute the bot member
     except Exception as e:
         pass
-        # me = client.get_user(187568903084441600)
-        # await me.send(f"{command_name}: {e}")
 
 
 async def unmute_with_reaction(user):
@@ -329,19 +322,6 @@ async def unmute_with_reaction(user):
                     await member.edit(mute=True)  # un-mute the bot member
     except Exception as e:
         pass
-        # me = client.get_user(187568903084441600)
-        # await me.send(f"{command_name}: {e}")
-
-
-# async def end_with_reaction(user):
-#     command_name = "end_with_reaction"
-#     try:
-#         if user.voice:  # check if the user is in a voice channel
-#             for member in user.voice.channel.members:  # traverse through the members list in current vc
-#                 await member.edit(mute=False)  # mute the non-bot member
-#     except Exception as e:
-#         # me = client.get_user(187568903084441600)
-#         # await me.send(f"{command_name}: {e}")
 
 
 # TODO: Move to on_raw_reaction_add(), get user obj using user_id, find a way to get reaction obj
@@ -434,7 +414,7 @@ async def disp_state(content):
 
 # run the bot
 discord_token = str()
-with open("token_test.json", "r") as token_file:
+with open("token.json", "r") as token_file:
     json_contents = json.load(token_file)
     discord_token               = json_contents["token"]
     survivors_voice_channel_id  = json_contents["survivors_voice_channel_id"]
