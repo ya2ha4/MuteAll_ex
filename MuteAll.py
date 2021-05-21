@@ -148,10 +148,10 @@ async def _mute(ctx):
             corpses_list.clear()
             is_muted = True
 
-        except discord.Forbidden:
-            await ctx.channel.send(  # the bot doesn't have the permission to mute
-                f"ミュート操作の権限がありません\n"
-                f"ボットアカウントに「管理者」か「メンバーをミュート」の権限を付与して下さい\n")
+        except discord.Forbidden as e:
+            logger.warning(f"[_mute] caused other: {e}")
+            await ctx.channel.send("ボット稼働に必要な権限が足りません: ボットに『管理者』が有効なロールを付与するか以下の権限を持つロールを付与して下さい\n"
+                                   "『メッセージを送信』『メッセージの管理』『メッセージ履歴を読む』『リアクションの追加』『メンバーをミュート』『メンバーのスピーカーをミュート』『メンバーを移動』")
 
         except discord.HTTPException as e:
             logger.warning(f"[_mute] caused HTTPException: {e}")
@@ -219,19 +219,19 @@ async def _unmute(ctx):
                 logger.debug(f"[_unmute]   corpses_member {member.name}.")
             is_muted = False
 
-        except discord.Forbidden:
-            await ctx.channel.send(  # the bot doesn't have the permission to mute
-                f"ミュート操作の権限がありません\n"
-                f"ボットアカウントに「管理者」か「メンバーをミュート」の権限を付与して下さい\n")
+        except discord.Forbidden as e:
+            logger.warning(f"[_unmute] caused other: {e}")
+            await ctx.channel.send("ボット稼働に必要な権限が足りません: ボットに『管理者』が有効なロールを付与するか以下の権限を持つロールを付与して下さい\n"
+                                   "『メッセージを送信』『メッセージの管理』『メッセージ履歴を読む』『リアクションの追加』『メンバーをミュート』『メンバーのスピーカーをミュート』『メンバーを移動』")
 
         except discord.HTTPException as e:
-            logger.warning(f"[_mute] caused HTTPException: {e}")
+            logger.warning(f"[_unmute] caused HTTPException: {e}")
             await ctx.channel.send("処理が途中で失敗しました (HTTPException) \n"
                                    "・試合中なら全員セルフミュートで対応して下さい\n"
                                    "・次の会議で🇷でリセットして死亡者は改めてセルフミュートして下さい\n")
 
         except Exception as e:
-            logger.warning(f"[_mute] caused other: {e}")
+            logger.warning(f"[_unmute] caused other: {e}")
             await ctx.channel.send("処理が途中で失敗しました\n"
                                    "・試合中なら全員セルフミュートで対応して下さい\n"
                                    "・次の会議で🇷でリセットして死亡者は改めてセルフミュートして下さい\n")
@@ -275,19 +275,19 @@ async def end(ctx):
                 else:
                     logger.info(f"Un-muted {no_of_members} users in {author.voice.channel}.")
 
-            except discord.Forbidden:
-                await ctx.channel.send(  # the bot doesn't have the permission to mute
-                    f"ミュート操作の権限がありません\n"
-                    f"ボットアカウントに「管理者」か「メンバーをミュート」の権限を付与して下さい\n")
+            except discord.Forbidden as e:
+                logger.warning(f"[end] caused other: {e}")
+                await ctx.channel.send("ボット稼働に必要な権限が足りません: ボットに『管理者』が有効なロールを付与するか以下の権限を持つロールを付与して下さい\n"
+                                       "『メッセージを送信』『メッセージの管理』『メッセージ履歴を読む』『リアクションの追加』『メンバーをミュート』『メンバーのスピーカーをミュート』『メンバーを移動』")
 
             except discord.HTTPException as e:
-                logger.warning(f"[_mute] caused HTTPException: {e}")
+                logger.warning(f"[end] caused HTTPException: {e}")
                 await ctx.channel.send("処理が途中で失敗しました (HTTPException) \n"
                                        "・試合中なら全員セルフミュートで対応して下さい\n"
                                        "・次の会議で🇷でリセットして死亡者は改めてセルフミュートして下さい\n")
 
             except Exception as e:
-                logger.warning(f"[_mute] caused other: {e}")
+                logger.warning(f"[end] caused other: {e}")
                 await ctx.channel.send("処理が途中で失敗しました\n"
                                        "・試合中なら全員セルフミュートで対応して下さい\n"
                                        "・次の会議で🇷でリセットして死亡者は改めてセルフミュートして下さい\n")
@@ -370,33 +370,36 @@ async def start(ctx):
                             mute_control_mes = None
                             await message.delete()
 
-            except discord.errors.Forbidden:
-                await ctx.send("Make sure I have the following permissions: `Manage Messages`, `Read Message History`, "
-                               "`Add Reactions`, `Mute Members`")
+            except discord.errors.Forbidden as e:
+                logger.warning(f"[on_reaction_add] caused other: {e}")
+                await ctx.send("ボット稼働に必要な権限が足りません: ボットに『管理者』が有効なロールを付与するか以下の権限を持つロールを付与して下さい\n"
+                               "『メッセージを送信』『メッセージの管理』『メッセージ履歴を読む』『リアクションの追加』『メンバーをミュート』『メンバーのスピーカーをミュート』『メンバーを移動』")
 
-    except discord.errors.Forbidden:
-        await ctx.send("Make sure I have the following permissions: `Manage Messages`, `Read Message History`, "
-                       "`Add Reactions`, `Mute Members`")
+    except discord.errors.Forbidden as e:
+        logger.warning(f"[start] caused other: {e}")
+        await ctx.send("ボット稼働に必要な権限が足りません: ボットに『管理者』が有効なロールを付与するか以下の権限を持つロールを付与して下さい\n"
+                       "『メッセージを送信』『メッセージの管理』『メッセージ履歴を読む』『リアクションの追加』『メンバーをミュート』『メンバーのスピーカーをミュート』『メンバーを移動』")
 
-    except discord.errors.NotFound:
-        await ctx.channel.send(f"Something went wrong. Try rejoining the VC. Also make sure the bot has the following "
-                               f"permissions: `Manage Messages`, `Read Message History`, `Add Reactions`, "
-                               f"`Mute Members`, `Deafen Members`. Please contact `SCARECOW#0456` if this keeps "
-                               f"happening. OR use the normal `.mute` and `.unmute`")
+    except discord.errors.NotFound as e:
+        logger.warning(f"[start] caused other: {e}")
+        await ctx.channel.send("スタートに失敗しました\n"
+                               "ボット稼働に必要な権限が付与されているか確認して下さい（以下のいずれかの条件を満たして下さい）\n"
+                               "・『管理者』が有効なロール\n"
+                               "・『メッセージを送信』『メッセージの管理』『メッセージ履歴を読む』『リアクションの追加』『メンバーをミュート』『メンバーのスピーカーをミュート』『メンバーを移動』が有効なロール")
 
-    except discord.errors.HTTPException:
-        await ctx.channel.send(f"Something went wrong. Try rejoining the VC. Also make sure the bot has the following "
-                               f"permissions: `Manage Messages`, `Read Message History`, `Add Reactions`, "
-                               f"`Mute Members`, `Deafen Members`. Please contact `SCARECOW#0456` if this keeps "
-                               f"happening. OR use the normal `.mute` and `.unmute`")
+    except discord.errors.HTTPException as e:
+        logger.warning(f"[start] caused other: {e}")
+        await ctx.channel.send("スタートに失敗しました\n"
+                               "ボット稼働に必要な権限が付与されているか確認して下さい（以下のいずれかの条件を満たして下さい）\n"
+                               "・『管理者』が有効なロール\n"
+                               "・『メッセージを送信』『メッセージの管理』『メッセージ履歴を読む』『リアクションの追加』『メンバーをミュート』『メンバーのスピーカーをミュート』『メンバーを移動』が有効なロール")
 
     except Exception as e:
-        # me = client.get_user(187568903084441600)
-        # await me.send(e)
-        await ctx.channel.send(f"Something went wrong. Try rejoining the VC. Also make sure the bot has the following "
-                               f"permissions: `Manage Messages`, `Read Message History`, `Add Reactions`, "
-                               f"`Mute Members`, `Deafen Members`. Please contact `SCARECOW#0456` if this keeps "
-                               f"happening. OR use the normal `.mute` and `.unmute`")
+        logger.warning(f"[start] caused other: {e}")
+        await ctx.channel.send("スタートに失敗しました\n"
+                               "ボット稼働に必要な権限が付与されているか確認して下さい（以下のいずれかの条件を満たして下さい）\n"
+                               "・『管理者』が有効なロール\n"
+                               "・『メッセージを送信』『メッセージの管理』『メッセージ履歴を読む』『リアクションの追加』『メンバーをミュート』『メンバーのスピーカーをミュート』『メンバーを移動』が有効なロール")
 
 
 @client.event
