@@ -125,8 +125,9 @@ token_template.json をコピーし名前を token.json に変更して以下の
 ### 使用ライブラリなどのライセンス
 - discord.py</br>
 Copyright (c) 2015-present Rapptz</br>
-https://github.com/Rapptz/discord.py/blob/master/LICENSE
+https://github.com/Rapptz/discord.py/blob/master/LICENSE</br>
 
 - MuteAll</br>
 Copyright (c) 2020 zahid47</br>
-https://github.com/zahid47/MuteAll/blob/master/LICENSE
+https://github.com/zahid47/MuteAll/blob/master/LICENSE</br>
+参考元コミット (4f04b906584ba39f124153a61abe3c705bd917f2)</br>
