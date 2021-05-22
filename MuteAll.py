@@ -40,7 +40,7 @@ is_muted = False
 mute_lock = asyncio.Lock()
 
 
-# sets status when the bot is ready
+# bot起動時のイベント
 @client.event
 async def on_ready():
     activity = discord.Activity(name=".help", type=discord.ActivityType.playing)
@@ -50,6 +50,7 @@ async def on_ready():
     logger.debug("死亡者部屋:" + client.get_channel(corpses_voice_channel_id).name)
 
 
+# botをサーバに招待した際のイベント
 @client.event
 async def on_guild_join(guild):
     for channel in guild.text_channels:
@@ -66,7 +67,7 @@ async def on_guild_join(guild):
 #    await ctx.send(f"{round(client.latency * 1000)} ms")
 
 
-# shows help text
+# ヘルプコマンド
 @client.command(aliases=["commands", "Help", "h", "H"])
 async def help(ctx):
     embed = discord.Embed(color=discord.Color.lighter_grey())
@@ -110,6 +111,7 @@ async def reset_mute(ctx):
         logger.debug(f"[reset_mute] unlock.")
 
 
+# ミュート有効化
 async def _mute(ctx):
     global is_muted, mute_lock
     async with mute_lock:
@@ -123,7 +125,7 @@ async def _mute(ctx):
             survivors_vc = client.get_channel(survivors_voice_channel_id)
             no_of_members = 0
             global corpses_list
-            for member in survivors_vc.members:  # traverse through the members list in survivor vc
+            for member in survivors_vc.members:
                 if not member.bot and not member.voice.self_mute:  # ボットでなく、ミュートにしていないメンバのみミュート
                     await member.edit(mute=True)
                     logger.debug(f"[_mute] mute {member.name}.")
@@ -167,7 +169,7 @@ async def _mute(ctx):
         logger.debug(f"[_mute] unlock.")
 
 
-# mutes everyone in the current voice channel and un-mutes the bots
+# ミュートコマンド
 @client.command(aliases=["m", "M", "Mute"])
 async def mute(ctx):
     command_name = "mute"
@@ -185,6 +187,7 @@ async def mute(ctx):
         await ctx.send("コマンドはテキストチャンネルにて実行して下さい")
 
 
+# ミュート解除
 async def _unmute(ctx):
     global is_muted, mute_lock
     async with mute_lock:
@@ -197,9 +200,9 @@ async def _unmute(ctx):
         try:
             survivors_vc = client.get_channel(survivors_voice_channel_id)
             no_of_members = 0
-            for member in survivors_vc.members:  # traverse through the members list in survivor vc
-                if not member.bot:  # check if member is not a bot
-                    await member.edit(mute=False)  # un-mute the non-bot member
+            for member in survivors_vc.members:
+                if not member.bot: # ボットでない生存者部屋のユーザの場合ミュート解除 
+                    await member.edit(mute=False)
                     logger.debug(f"[_unmute] unmute {member.name}.")
                     no_of_members += 1
                 else:
@@ -213,7 +216,7 @@ async def _unmute(ctx):
                 logger.info(f"Un-muted {no_of_members} users in {survivors_vc}.")
             global corpses_list
             corpses_list = client.get_channel(corpses_voice_channel_id).members
-            for member in corpses_list:
+            for member in corpses_list: # 死亡者部屋のユーザをミュート状態で生存者部屋へ移動
                 await member.edit(mute=True, voice_channel=survivors_vc)
                 logger.debug(f"[_unmute]   corpses_member {member.name}.")
             is_muted = False
@@ -239,7 +242,7 @@ async def _unmute(ctx):
         logger.debug(f"[_unmute] unlock.")
 
 
-# un-mutes everyone in the current voice channel and mutes the bots
+# ミュート解除コマンド
 @client.command(aliases=["um", "un", "un-mute", "u", "U", "Un", "Um", "Unmute"])
 async def unmute(ctx):
     command_name = "unmute"
@@ -254,7 +257,7 @@ async def unmute(ctx):
         await ctx.send("コマンドはテキストチャンネルにて実行して下さい")
 
 
-# end the game and un-mute everyone including bots
+# 終了コマンド
 @client.command(aliases=["e", "E", "End"])
 async def end(ctx):
     command_name = "end"
@@ -264,8 +267,8 @@ async def end(ctx):
         if author.voice:  # check if the user is in a voice channel
             try:
                 no_of_members = 0
-                for member in author.voice.channel.members:  # traverse through the members list in current vc
-                    await member.edit(mute=False)  # un-mute the member
+                for member in author.voice.channel.members:
+                    await member.edit(mute=False)  # ミュート解除
                     no_of_members += 1
                 if no_of_members == 0:
                     logger.info(f"Everyone, please disconnect and reconnect to the Voice Channel again.")
@@ -296,35 +299,7 @@ async def end(ctx):
         await ctx.send("コマンドはテキストチャンネルにて実行して下さい")
 
 
-async def mute_with_reaction(user):
-    command_name = "mute_with_reaction"
-    try:
-        if user.voice:  # check if the user is in a voice channel
-            if user.guild_permissions.mute_members:  # check if the user has mute members permission
-                for member in user.voice.channel.members:  # traverse through the members list in current vc
-                    if not member.bot:  # check if member is not a bot
-                        await member.edit(mute=True)  # mute the non-bot member
-                    else:
-                        await member.edit(mute=False)  # un-mute the bot member
-    except Exception as e:
-        pass
-
-
-async def unmute_with_reaction(user):
-    command_name = "unmute_with_reaction"
-    try:
-        if user.voice:  # check if the user is in a voice channel
-            for member in user.voice.channel.members:  # traverse through the members list in current vc
-                if not member.bot:  # check if member is not a bot
-                    await member.edit(mute=False)  # mute the non-bot member
-                else:
-                    await member.edit(mute=True)  # un-mute the bot member
-    except Exception as e:
-        pass
-
-
-# TODO: Move to on_raw_reaction_add(), get user obj using user_id, find a way to get reaction obj
-# use reactions instead of typing
+# リアクションによるミュート制御用メッセージ作成コマンド
 @client.command(aliases=["play", "s", "p"])
 async def start(ctx):
     try:
@@ -353,12 +328,10 @@ async def start(ctx):
                         # bot itself, this check is needed so the bot doesn't mute/unmute on reactions to any other
                         # messages
                         if reaction.emoji == "🇲":
-                            #await mute_with_reaction(user)
                             await _mute(ctx)
                             await reaction.remove(user)
 
                         elif reaction.emoji == "🇺":
-                            #await unmute_with_reaction(user)
                             await _unmute(ctx)
                             await reaction.remove(user)
 
