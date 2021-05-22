@@ -74,7 +74,7 @@ async def help(ctx):
     embed.set_author(name="Available Commands")
 
     embed.add_field(name="`.start` / `.s`",
-                    value="エモーションでミュート制御できるメッセージを作成．\n"
+                    value="リアクションでミュート制御できるメッセージを作成．\n"
                           "制御方法は生成されたメッセージを確認して下さい．\n"
                           "ボットを再起動すると再起動前に生成したメッセージで制御できなくなります．",
                     inline=False)
@@ -329,11 +329,12 @@ async def unmute_with_reaction(user):
 async def start(ctx):
     try:
         embed = discord.Embed()
+        embed_text =  f":regional_indicator_m: ミュート（実行時、ミュートのユーザは {client.get_channel(corpses_voice_channel_id).name} へ移動します）\n"
+        embed_text +=  ":regional_indicator_u: ミュート解除\n"
+        embed_text +=  ":regional_indicator_r: リセット（1試合終了ごとに実行して下さい）\n"
+        embed_text +=  ":regional_indicator_e: 終了（メッセージの削除）"
         embed.add_field(name="リアクションで操作が出来ます",
-                        value=":regional_indicator_m: ミュート\n"
-                              ":regional_indicator_u: ミュート解除\n"
-                              ":regional_indicator_r: リセット（1試合終了ごとに実行して下さい）\n"
-                              ":regional_indicator_e: 終了（メッセージの削除）",
+                        value=embed_text,
                               inline=False)
         global mute_control_mes
         message = await ctx.send(content="準備OK!", embed=embed)
