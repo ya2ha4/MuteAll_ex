@@ -80,7 +80,7 @@ token_template.json をコピーし名前を token.json に変更して以下の
 
 <pre>
 {
-    "token": "AbCD1EFgH2IKLm3nOPQ4RsTU.VWxYZ5.ABCd6eFGH7IjKL8MNOp9qRST_UvWX1YZ"
+    "token": "AbCD1EFgH2IKLm3nOPQ4RsTU.VWxYZ5.ABCd6eFGH7IjKL8MNOp9qRST_UvWX1YZ",
     "survivors_voice_channel_id": 12345678901234567890,
     "corpses_voice_channel_id": 12345678901234567891
 }
