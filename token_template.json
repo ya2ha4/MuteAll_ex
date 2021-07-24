@@ -1,5 +1,6 @@
 {
-    "token": "",
+    "token": [""],
     "survivors_voice_channel_id": ,
-    "corpses_voice_channel_id": 
+    "corpses_voice_channel_id": ,
+    "command_enable_text_channel_id": 
 }

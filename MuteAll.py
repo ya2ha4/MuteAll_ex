@@ -1,398 +1,413 @@
 import asyncio
-import discord
-from discord.ext import commands
 import json
 import logging
-import random
+import typing
+from collections import namedtuple
+from logging import getLogger
+
+import discord
+from discord.ext import commands
 
 
-# logging 設定 ================================
-logging.basicConfig(level=logging.INFO)
-
-logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
-logging_file_handler = logging.FileHandler(filename="MuteAll_ex.log", encoding="utf-8", mode="w")
-logger.addHandler(logging_file_handler)
+logger = getLogger(__name__)
 
 
-# discord_py 設定 ================================
-intents = discord.Intents.default()
-intents.members = True
-client = commands.Bot(command_prefix=".", intents=intents)
-
-# removes the default ".help" command
-client.remove_command("help")
-
-survivors_voice_channel_id = int(0)
-corpses_voice_channel_id = int(0)
-
-
-# グローバル変数設定 ================================
-# mute時の死亡者部屋のユーザリスト（unmute時に状態復帰させる為の情報格納用）
-# list[discord.Member]
-corpses_list = list()
-
-# startコマンドで生成するミュート操作用のメッセージ
-# discord.Message
-mute_control_mes = None
-
-is_muted = False
-mute_lock = asyncio.Lock()
+class MessageListenerCog(commands.Cog):
+    def __init__(self, main_bot: commands.Bot, bots_list: typing.List[commands.Bot], config_contents: typing.Dict) -> None:
+        self._main_bot: commands.Bot = main_bot
+        self._bots_list: typing.List[commands.Bot] = bots_list
+        self._survivors_voice_channel_id: int = config_contents.get("survivors_voice_channel_id")
+        self._corpses_voice_channel_id: int = config_contents.get("corpses_voice_channel_id")
+        self._command_enable_text_channel_id: int = config_contents.get("command_enable_text_channel_id")
+        self._corpses_list: typing.List[discord.Member] = list()
+        self._mute_control_mes: discord.Message = None
+        self._is_muted: bool = False
+        self._mute_lock: asyncio.Lock = asyncio.Lock()
 
 
-# bot起動時のイベント
-@client.event
-async def on_ready():
-    activity = discord.Activity(name=".help", type=discord.ActivityType.playing)
-    await client.change_presence(status=discord.Status.online, activity=activity)
-    logger.info("Ready!")
-    logger.debug("生存者部屋:" + client.get_channel(survivors_voice_channel_id).name)
-    logger.debug("死亡者部屋:" + client.get_channel(corpses_voice_channel_id).name)
+    # bot起動時のイベント
+    @commands.Cog.listener(name="on_ready")
+    async def on_ready(self) -> None:
+        activity = discord.Activity(name=".help", type=discord.ActivityType.playing)
+        await self._main_bot.change_presence(status=discord.Status.online, activity=activity)
+        logger.info("Ready!")
+        logger.debug("生存者部屋:" + self._main_bot.get_channel(self._survivors_voice_channel_id).name)
+        logger.debug("死亡者部屋:" + self._main_bot.get_channel(self._corpses_voice_channel_id).name)
+        logger.info(f"Active bot:{len(self._bots_list)}")
+        for bot in self._bots_list:
+            logger.debug(f"using: {bot.user}")
 
 
-# botをサーバに招待した際のイベント
-@client.event
-async def on_guild_join(guild):
-    for channel in guild.text_channels:
-        if channel.permissions_for(guild.me).send_messages:
-            await channel.send("サーバに Mute_ex ボットが導入されました\n"
-                               ".s と入力するとミュート/ミュート解除を制御する為のメッセージを作ることができます\n"
-                               "使い方は .help でヘルプを参照下さい\n")
-            break
+    @commands.Cog.listener(name="on_reaction_add")
+    async def response_reaction(self, reaction: discord.Reaction, user: typing.Union[discord.Member, discord.User]) -> None:
+        try:
+            if self._mute_control_mes is not None and user != self._main_bot.user and reaction.message.author == self._main_bot.user:
+                if self._mute_control_mes.id == reaction.message.id:
+                    if reaction.emoji == "🇲":
+                        await self._mute(reaction.message.channel)
+                        await reaction.remove(user)
+
+                    elif reaction.emoji == "🇺":
+                        await self._unmute(reaction.message.channel)
+                        await reaction.remove(user)
+
+                    elif reaction.emoji == "🇷":
+                        await self.reset_mute(reaction.message.channel)
+                        await reaction.remove(user)
+
+                    elif reaction.emoji == "🇪":
+                        self._mute_control_mes = None
+                        await reaction.message.delete()
+
+        except discord.errors.Forbidden as e:
+            logger.warning(f"caused other: {e}")
+            await reaction.message.channel.send("ボット稼働に必要な権限が足りません: ボットに『管理者』が有効なロールを付与するか以下の権限を持つロールを付与して下さい\n"
+                           "『メッセージを送信』『メッセージの管理』『メッセージ履歴を読む』『リアクションの追加』『メンバーをミュート』『メンバーのスピーカーをミュート』『メンバーを移動』")
 
 
-# shows latency of the bot
-#@client.command(aliases=["latency"])
-#async def ping(ctx):
-#    await ctx.send(f"{round(client.latency * 1000)} ms")
-
-
-# ヘルプコマンド
-@client.command(aliases=["commands", "Help", "h", "H"])
-async def help(ctx):
-    embed = discord.Embed(color=discord.Color.lighter_grey())
-
-    embed.set_author(name="Available Commands")
-
-    embed.add_field(name="`.start` / `.s`",
-                    value="リアクションでミュート制御できるメッセージを作成．\n"
-                          "制御方法は生成されたメッセージを確認して下さい．\n"
-                          "ボットを再起動すると再起動前に生成したメッセージで制御できなくなります．",
-                    inline=False)
-
-    embed.add_field(name="`.end` / `.e`",
-                    value=".start, .s にて作成したメッセージの削除",
-                    inline=False)
-
-    await ctx.send(embed=embed)
-
-
-# ミュートのリセット
-@client.command(aliases=["rm"])
-async def reset_mute(ctx):
-    global mute_lock
-    async with mute_lock:
-        await disp_state(content="初期化中")
-        logger.debug(f"[reset_mute] lock.")
-
-        # 全メンバのミュート解除
-        for member in client.get_channel(survivors_voice_channel_id).members:
+    @commands.Cog.listener(name="on_voice_state_update")
+    async def on_voice_state_update(self, member: discord.Member, before: discord.VoiceState, after: discord.VoiceState) -> None:
+        # Mute前に死亡者部屋へ移動出来なかった人のミュートを解除
+        if after.channel == self._main_bot.get_channel(self._corpses_voice_channel_id) and member.voice.mute == True:
             await member.edit(mute=False)
-        survivors_vc = client.get_channel(survivors_voice_channel_id)
-        for member in client.get_channel(corpses_voice_channel_id).members:
-            await member.edit(mute=False, voice_channel=survivors_vc)
-
-        # グローバル変数の初期化
-        global corpses_list, is_muted
-        corpses_list.clear()
-        is_muted = False
-
-        await disp_state(content="準備OK!")
-        logger.debug(f"[reset_mute] unlock.")
+            logger.debug(f"unmute {member.name}.")
 
 
-# ミュート有効化
-async def _mute(ctx):
-    global is_muted, mute_lock
-    async with mute_lock:
-        logger.debug(f"[_mute] lock.")
-        if is_muted == True:
-            logger.debug(f"[_mute] unlock.")
+    # リアクションによるミュート制御用メッセージ作成コマンド
+    @commands.command(aliases=["s"])
+    async def start(self, ctx, *, member: discord.Member=None) -> None:
+        if not self.is_enable_channel(ctx):
             return
 
-        await disp_state(content="ミュート処理中")
         try:
-            survivors_vc = client.get_channel(survivors_voice_channel_id)
-            no_of_members = 0
-            global corpses_list
-            for member in survivors_vc.members:
-                if not member.bot and not member.voice.self_mute:  # ボットでなく、ミュートにしていないメンバのみミュート
-                    await member.edit(mute=True)
-                    logger.debug(f"[_mute] mute {member.name}.")
-                    no_of_members += 1
-                elif not member.bot and member.voice.self_mute: # ミュートにしているので死亡者部屋のメンバに追加
-                    corpses_list.append(member)
-                    logger.debug(f"[_mute] add corpses_list {member.name}.")
-                else:
-                    await member.edit(mute=False)
-                    logger.debug(f"Un-muted {member.name}")
-            if no_of_members == 0:
-                logger.info(f"Everyone, please disconnect and reconnect to the Voice Channel again.")
-            elif no_of_members < 2:
-                logger.info(f"Muted {no_of_members} user in {survivors_vc}.")
-            else:
-                logger.info(f"Muted {no_of_members} users in {survivors_vc}.")
-            corpses_vc = client.get_channel(corpses_voice_channel_id)
-            for member in corpses_list:
-                await member.edit(mute=False, voice_channel=corpses_vc)
-                logger.debug(f"[_mute]   corpses_member {member.name}.")
-            corpses_list.clear()
-            is_muted = True
+            embed = discord.Embed()
+            embed_text =  f":regional_indicator_m: ミュート（実行時、ミュートのユーザは {self._main_bot.get_channel(self._corpses_voice_channel_id).name} へ移動します）\n"
+            embed_text +=  ":regional_indicator_u: ミュート解除\n"
+            embed_text +=  ":regional_indicator_r: リセット（1試合終了ごとに実行して下さい）\n"
+            embed_text +=  ":regional_indicator_e: 終了（メッセージの削除）"
+            embed.add_field(name="リアクションで操作が出来ます",
+                            value=embed_text,
+                                  inline=False)
+            message = await ctx.send(content="準備OK!", embed=embed)
+            self._mute_control_mes = message
 
-        except discord.Forbidden as e:
-            logger.warning(f"[_mute] caused other: {e}")
-            await ctx.channel.send("ボット稼働に必要な権限が足りません: ボットに『管理者』が有効なロールを付与するか以下の権限を持つロールを付与して下さい\n"
-                                   "『メッセージを送信』『メッセージの管理』『メッセージ履歴を読む』『リアクションの追加』『メンバーをミュート』『メンバーのスピーカーをミュート』『メンバーを移動』")
+            await message.add_reaction("🇲")
+            await message.add_reaction("🇺")
+            await message.add_reaction("🇷")
+            await message.add_reaction("🇪")
 
-        except discord.HTTPException as e:
-            logger.warning(f"[_mute] caused HTTPException: {e}")
-            await ctx.channel.send("処理が途中で失敗しました (HTTPException) \n"
-                                   "・試合中なら全員セルフミュートで対応して下さい\n"
-                                   "・次の会議で🇷でリセットして死亡者は改めてセルフミュートして下さい\n")
+        except discord.errors.Forbidden as e:
+            logger.warning(f"[start] caused other: {e}")
+            await ctx.send("ボット稼働に必要な権限が足りません: ボットに『管理者』が有効なロールを付与するか以下の権限を持つロールを付与して下さい\n"
+                           "『メッセージを送信』『メッセージの管理』『メッセージ履歴を読む』『リアクションの追加』『メンバーをミュート』『メンバーのスピーカーをミュート』『メンバーを移動』")
+
+        except discord.errors.NotFound as e:
+            logger.warning(f"[start] caused other: {e}")
+            await ctx.channel.send("スタートに失敗しました\n"
+                                   "ボット稼働に必要な権限が付与されているか確認して下さい（以下のいずれかの条件を満たして下さい）\n"
+                                   "・『管理者』が有効なロール\n"
+                                   "・『メッセージを送信』『メッセージの管理』『メッセージ履歴を読む』『リアクションの追加』『メンバーをミュート』『メンバーのスピーカーをミュート』『メンバーを移動』が有効なロール")
+
+        except discord.errors.HTTPException as e:
+            logger.warning(f"[start] caused other: {e}")
+            await ctx.channel.send("スタートに失敗しました\n"
+                                   "ボット稼働に必要な権限が付与されているか確認して下さい（以下のいずれかの条件を満たして下さい）\n"
+                                   "・『管理者』が有効なロール\n"
+                                   "・『メッセージを送信』『メッセージの管理』『メッセージ履歴を読む』『リアクションの追加』『メンバーをミュート』『メンバーのスピーカーをミュート』『メンバーを移動』が有効なロール")
+
         except Exception as e:
-            logger.warning(f"[_mute] caused other: {e}")
-            await ctx.channel.send("処理が途中で失敗しました\n"
-                                   "・試合中なら全員セルフミュートで対応して下さい\n"
-                                   "・次の会議で🇷でリセットして死亡者は改めてセルフミュートして下さい\n")
-
-        await disp_state(content="ミュート!")
-        logger.debug(f"[_mute] unlock.")
+            logger.warning(f"[start] caused other: {e}")
+            await ctx.channel.send("スタートに失敗しました\n"
+                                   "ボット稼働に必要な権限が付与されているか確認して下さい（以下のいずれかの条件を満たして下さい）\n"
+                                   "・『管理者』が有効なロール\n"
+                                   "・『メッセージを送信』『メッセージの管理』『メッセージ履歴を読む』『リアクションの追加』『メンバーをミュート』『メンバーのスピーカーをミュート』『メンバーを移動』が有効なロール")
 
 
-# ミュートコマンド
-@client.command(aliases=["m", "M", "Mute"])
-async def mute(ctx):
-    command_name = "mute"
-    author = ctx.author
-
-    if ctx.guild:  # check if the msg was in a server's text channel
-        if author.voice:  # check if the user is in a voice channel
-            if author.guild_permissions.mute_members:  # check if the user has mute members permission
-                await _mute(ctx)
-            else:
-                await ctx.channel.send("ミュート権限がありません。")
-        else:
-            await ctx.send("ボット利用するにはボイスチャンネルに参加して下さい")
-    else:
-        await ctx.send("コマンドはテキストチャンネルにて実行して下さい")
-
-
-# ミュート解除
-async def _unmute(ctx):
-    global is_muted, mute_lock
-    async with mute_lock:
-        logger.debug(f"[_unmute] lock.")
-        if is_muted == False:
-            logger.debug(f"[_unmute] unlock.")
+    @commands.command(aliases=["h", "Help", "H"])
+    async def help(self, ctx, *, member: discord.Member=None) -> None:
+        if not self.is_enable_channel(ctx):
             return
 
-        await disp_state(content="ミュート解除処理中")
-        try:
-            survivors_vc = client.get_channel(survivors_voice_channel_id)
-            no_of_members = 0
-            for member in survivors_vc.members:
-                if not member.bot: # ボットでない生存者部屋のユーザの場合ミュート解除 
-                    await member.edit(mute=False)
-                    logger.debug(f"[_unmute] unmute {member.name}.")
-                    no_of_members += 1
-                else:
-                    await member.edit(mute=True)  # mute the bot member
-                    await ctx.send(f"Muted {member.name}")
-            if no_of_members == 0:
-                logger.info(f"Everyone, please disconnect and reconnect to the Voice Channel again.")
-            elif no_of_members < 2:
-                logger.info(f"Un-muted {no_of_members} user in {survivors_vc}.")
-            else:
-                logger.info(f"Un-muted {no_of_members} users in {survivors_vc}.")
-            global corpses_list
-            corpses_list = client.get_channel(corpses_voice_channel_id).members
-            for member in corpses_list: # 死亡者部屋のユーザをミュート状態で生存者部屋へ移動
-                await member.edit(mute=True, voice_channel=survivors_vc)
-                logger.debug(f"[_unmute]   corpses_member {member.name}.")
-            is_muted = False
+        embed = discord.Embed(color=discord.Color.lighter_grey())
 
-        except discord.Forbidden as e:
-            logger.warning(f"[_unmute] caused other: {e}")
-            await ctx.channel.send("ボット稼働に必要な権限が足りません: ボットに『管理者』が有効なロールを付与するか以下の権限を持つロールを付与して下さい\n"
-                                   "『メッセージを送信』『メッセージの管理』『メッセージ履歴を読む』『リアクションの追加』『メンバーをミュート』『メンバーのスピーカーをミュート』『メンバーを移動』")
+        embed.set_author(name="Available Commands")
 
-        except discord.HTTPException as e:
-            logger.warning(f"[_unmute] caused HTTPException: {e}")
-            await ctx.channel.send("処理が途中で失敗しました (HTTPException) \n"
-                                   "・試合中なら全員セルフミュートで対応して下さい\n"
-                                   "・次の会議で🇷でリセットして死亡者は改めてセルフミュートして下さい\n")
+        embed.add_field(name="`.start` / `.s`",
+                        value="リアクションでミュート制御できるメッセージを作成．\n"
+                              "制御方法は生成されたメッセージを確認して下さい．\n"
+                              "ボットを再起動すると再起動前に生成したメッセージで制御できなくなります．",
+                        inline=False)
 
-        except Exception as e:
-            logger.warning(f"[_unmute] caused other: {e}")
-            await ctx.channel.send("処理が途中で失敗しました\n"
-                                   "・試合中なら全員セルフミュートで対応して下さい\n"
-                                   "・次の会議で🇷でリセットして死亡者は改めてセルフミュートして下さい\n")
-
-        await disp_state(content="ミュート解除!")
-        logger.debug(f"[_unmute] unlock.")
+        await ctx.send(embed=embed)
 
 
-# ミュート解除コマンド
-@client.command(aliases=["um", "un", "un-mute", "u", "U", "Un", "Um", "Unmute"])
-async def unmute(ctx):
-    command_name = "unmute"
-    author = ctx.author
+    async def _mute(self, channel) -> None:
+        async with self._mute_lock:
+            logger.debug(f"lock.")
+            if self._is_muted == True:
+                logger.debug(f"unlock.")
+                return
 
-    if ctx.guild:  # check if the msg was in a server's text channel
-        if author.voice:  # check if the user is in a voice channel
-            await _unmute(ctx)
-        else:
-            await ctx.send("ボット利用するにはボイスチャンネルに参加して下さい")
-    else:
-        await ctx.send("コマンドはテキストチャンネルにて実行して下さい")
-
-
-# 終了コマンド
-@client.command(aliases=["e", "E", "End"])
-async def end(ctx):
-    command_name = "end"
-    author = ctx.author
-
-    if ctx.guild:  # check if the msg was in a server's text channel
-        if author.voice:  # check if the user is in a voice channel
+            await self._disp_state(content="ミュート処理中")
             try:
-                no_of_members = 0
-                for member in author.voice.channel.members:
-                    await member.edit(mute=False)  # ミュート解除
-                    no_of_members += 1
+                # 生存者部屋メンバのミュート処理
+                survivors_vc: discord.abc.GuildChannel = self._main_bot.get_channel(self._survivors_voice_channel_id)
+                no_of_members: int = 0
+                mute_params_list: typing.List[typing.List[MuteMemberParam]] = [list() for i in range(len(self._bots_list))]
+                for member in survivors_vc.members:
+                    if not member.bot and not member.voice.self_mute:  # ボットでなく、ミュートにしていないメンバのみミュート
+                        mute_params, _index = self.get_less_elements_list(mute_params_list)
+                        mute_params.append(MuteMemberParam(member.id, True, None))
+                        #await member.edit(mute=True)
+                        logger.debug(f"mute {member.name}.")
+                        no_of_members += 1
+                    elif not member.bot and member.voice.self_mute: # ミュートにしているので死亡者部屋のメンバに追加
+                        self._corpses_list.append(member)
+                        logger.debug(f"add corpses_list {member.name}.")
+                    else:
+                        mute_params, _index = self.get_less_elements_list(mute_params_list)
+                        mute_params.append(MuteMemberParam(member.id, False, None))
+                        #await member.edit(mute=False)
+                        logger.debug(f"Un-muted {member.name}")
+                await self.process_mute(survivors_vc.members, mute_params_list[0])
+                survivors_vc_list: typing.List[discord.abc.GuildChannel] = [survivors_vc]
+                for i in range(1, len(self._bots_list)):
+                    sub_survivors_vc = self._bots_list[i].get_channel(self._survivors_voice_channel_id)
+                    survivors_vc_list.append(sub_survivors_vc)
+                    await self.process_mute(sub_survivors_vc.members, mute_params_list[i])
                 if no_of_members == 0:
                     logger.info(f"Everyone, please disconnect and reconnect to the Voice Channel again.")
                 elif no_of_members < 2:
-                    logger.info(f"Un-muted {no_of_members} user in {author.voice.channel}.")
+                    logger.info(f"Muted {no_of_members} user in {survivors_vc}.")
                 else:
-                    logger.info(f"Un-muted {no_of_members} users in {author.voice.channel}.")
+                    logger.info(f"Muted {no_of_members} users in {survivors_vc}.")
+
+                # 死亡者部屋メンバのミュート解除、部屋移動処理
+                mute_params_list: typing.List[typing.List[MuteMemberParam]] = [list() for i in range(len(self._bots_list))]
+                corpses_vc_list = [bot.get_channel(self._corpses_voice_channel_id) for bot in self._bots_list]
+                for member in self._corpses_list:
+                    mute_params, mute_params_index = self.get_less_elements_list(mute_params_list)
+                    mute_params.append(MuteMemberParam(member.id, False, corpses_vc_list[mute_params_index]))
+                    #await member.edit(mute=False, voice_channel=corpses_vc_list[0])
+                    logger.debug(f"   corpses_member {member.name}.")
+                await self.process_mute(self._corpses_list, mute_params_list[0])
+                logger.debug(f"main:{len(mute_params_list[0])}")
+                for i in range(1, len(self._bots_list)):
+                    await self.process_mute(survivors_vc_list[i].members, mute_params_list[i]) # corpses_list は self._main_bot から取得しているので他botは生存者部屋リストで代用
+                    logger.debug(f"sub[{i}]:{len(mute_params_list[i])}")
+                
+                self._corpses_list.clear()
+                self._is_muted = True
 
             except discord.Forbidden as e:
-                logger.warning(f"[end] caused other: {e}")
-                await ctx.channel.send("ボット稼働に必要な権限が足りません: ボットに『管理者』が有効なロールを付与するか以下の権限を持つロールを付与して下さい\n"
+                logger.warning(f"caused other: {e}")
+                await channel.send("ボット稼働に必要な権限が足りません: ボットに『管理者』が有効なロールを付与するか以下の権限を持つロールを付与して下さい\n"
                                        "『メッセージを送信』『メッセージの管理』『メッセージ履歴を読む』『リアクションの追加』『メンバーをミュート』『メンバーのスピーカーをミュート』『メンバーを移動』")
 
             except discord.HTTPException as e:
-                logger.warning(f"[end] caused HTTPException: {e}")
-                await ctx.channel.send("処理が途中で失敗しました (HTTPException) \n"
+                logger.warning(f"caused HTTPException: {e}")
+                await channel.send("処理が途中で失敗しました (HTTPException) \n"
+                                       "・試合中なら全員セルフミュートで対応して下さい\n"
+                                       "・次の会議で🇷でリセットして死亡者は改めてセルフミュートして下さい\n")
+            except Exception as e:
+                logger.warning(f"caused other: {e}")
+                await channel.send("処理が途中で失敗しました\n"
+                                       "・試合中なら全員セルフミュートで対応して下さい\n"
+                                       "・次の会議で🇷でリセットして死亡者は改めてセルフミュートして下さい\n")
+
+            await self._disp_state(content="ミュート!")
+            logger.debug(f"unlock.")
+
+
+    async def _unmute(self, channel) -> None:
+        async with self._mute_lock:
+            logger.debug(f"lock.")
+            if self._is_muted == False:
+                logger.debug(f"unlock.")
+                return
+
+            await self._disp_state(content="ミュート解除処理中")
+            try:
+                # 生存者部屋メンバのミュート解除処理
+                survivors_vc = self._main_bot.get_channel(self._survivors_voice_channel_id)
+                no_of_members = 0
+                mute_params_list: typing.List[typing.List[MuteMemberParam]] = [list() for i in range(len(self._bots_list))]
+                for member in survivors_vc.members:
+                    if not member.bot: # ボットでない生存者部屋のユーザの場合ミュート解除 
+                        mute_params, _index = self.get_less_elements_list(mute_params_list)
+                        mute_params.append(MuteMemberParam(member.id, False, None))
+                        #await member.edit(mute=False)
+                        logger.debug(f"unmute {member.name}.")
+                        no_of_members += 1
+                    else:
+                        mute_params, _index = self.get_less_elements_list(mute_params_list)
+                        mute_params.append(MuteMemberParam(member.id, True, None))
+                        #await member.edit(mute=True)  # mute the bot member
+                        await channel.send(f"Muted {member.name}")
+                await self.process_mute(survivors_vc.members, mute_params_list[0])
+                survivors_vc_list: typing.List[typing.Any] = [survivors_vc]
+                for i in range(1, len(self._bots_list)):
+                    sub_survivors_vc = self._bots_list[i].get_channel(self._survivors_voice_channel_id)
+                    survivors_vc_list.append(sub_survivors_vc)
+                    await self.process_mute(sub_survivors_vc.members, mute_params_list[i])
+                if no_of_members == 0:
+                    logger.info(f"Everyone, please disconnect and reconnect to the Voice Channel again.")
+                elif no_of_members < 2:
+                    logger.info(f"Un-muted {no_of_members} user in {survivors_vc}.")
+                else:
+                    logger.info(f"Un-muted {no_of_members} users in {survivors_vc}.")
+
+                # 死亡者部屋メンバのミュート、部屋移動処理
+                mute_params_list: typing.List[typing.List[MuteMemberParam]] = [list() for i in range(len(self._bots_list))]
+                self._corpses_list = self._main_bot.get_channel(self._corpses_voice_channel_id).members
+                for member in self._corpses_list: # 死亡者部屋のユーザをミュート状態で生存者部屋へ移動
+                    mute_params, mute_params_index = self.get_less_elements_list(mute_params_list)
+                    mute_params.append(MuteMemberParam(member.id, True, survivors_vc_list[mute_params_index]))
+                    #await member.edit(mute=True, voice_channel=survivors_vc)
+                    logger.debug(f"   corpses_member {member.name}.")
+                await self.process_mute(self._corpses_list, mute_params_list[0])
+                logger.debug(f"main:{len(mute_params_list[0])}")
+                for i in range(1, len(self._bots_list)):
+                    await self.process_mute(self._bots_list[i].get_channel(self._corpses_voice_channel_id).members, mute_params_list[i])
+                    logger.debug(f"sub{i}:{len(mute_params_list[i])}")
+                self._is_muted = False
+
+            except discord.Forbidden as e:
+                logger.warning(f"caused other: {e}")
+                await channel.send("ボット稼働に必要な権限が足りません: ボットに『管理者』が有効なロールを付与するか以下の権限を持つロールを付与して下さい\n"
+                                       "『メッセージを送信』『メッセージの管理』『メッセージ履歴を読む』『リアクションの追加』『メンバーをミュート』『メンバーのスピーカーをミュート』『メンバーを移動』")
+
+            except discord.HTTPException as e:
+                logger.warning(f"caused HTTPException: {e}")
+                await channel.send("処理が途中で失敗しました (HTTPException) \n"
                                        "・試合中なら全員セルフミュートで対応して下さい\n"
                                        "・次の会議で🇷でリセットして死亡者は改めてセルフミュートして下さい\n")
 
             except Exception as e:
-                logger.warning(f"[end] caused other: {e}")
-                await ctx.channel.send("処理が途中で失敗しました\n"
+                logger.warning(f"caused other: {e}")
+                await channel.send("処理が途中で失敗しました\n"
                                        "・試合中なら全員セルフミュートで対応して下さい\n"
                                        "・次の会議で🇷でリセットして死亡者は改めてセルフミュートして下さい\n")
-        else:
-            await ctx.send("ボット利用するにはボイスチャンネルに参加して下さい")
-    else:
-        await ctx.send("コマンドはテキストチャンネルにて実行して下さい")
+
+            await self._disp_state(content="ミュート解除!")
+            logger.debug(f"unlock.")
 
 
-# リアクションによるミュート制御用メッセージ作成コマンド
-@client.command(aliases=["play", "s", "p"])
-async def start(ctx):
-    try:
-        embed = discord.Embed()
-        embed_text =  f":regional_indicator_m: ミュート（実行時、ミュートのユーザは {client.get_channel(corpses_voice_channel_id).name} へ移動します）\n"
-        embed_text +=  ":regional_indicator_u: ミュート解除\n"
-        embed_text +=  ":regional_indicator_r: リセット（1試合終了ごとに実行して下さい）\n"
-        embed_text +=  ":regional_indicator_e: 終了（メッセージの削除）"
-        embed.add_field(name="リアクションで操作が出来ます",
-                        value=embed_text,
-                              inline=False)
-        global mute_control_mes
-        message = await ctx.send(content="準備OK!", embed=embed)
-        mute_control_mes = message
+    async def reset_mute(self, channel) -> None:
+        async with self._mute_lock:
+            await self._disp_state(content="初期化中")
+            logger.debug(f"lock.")
 
-        await message.add_reaction("🇲")
-        await message.add_reaction("🇺")
-        await message.add_reaction("🇷")
-        await message.add_reaction("🇪")
+            survivors_vc_list: typing.List[discord.abc.GuildChannel] = [bot.get_channel(self._survivors_voice_channel_id) for bot in self._bots_list]
+            mute_params_list: typing.List[typing.List[MuteMemberParam]] = [list() for i in range(len(self._bots_list))]
+            # 全メンバのミュート解除
+            for member in survivors_vc_list[0].members:
+                mute_params, _index = self.get_less_elements_list(mute_params_list)
+                mute_params.append(MuteMemberParam(member.id, False, None))
+                #await member.edit(mute=False)
+            for i in range(len(self._bots_list)):
+                await self.process_mute(survivors_vc_list[i].members, mute_params_list[i])
 
-        @client.event
-        async def on_reaction_add(reaction, user):
+            corpses_vc = self._main_bot.get_channel(self._corpses_voice_channel_id)
+            mute_params_list: typing.List[typing.List[MuteMemberParam]] = [list() for i in range(len(self._bots_list))]
+            for member in corpses_vc.members:
+                mute_params, mute_params_index = self.get_less_elements_list(mute_params_list)
+                mute_params.append(MuteMemberParam(member.id, False, survivors_vc_list[mute_params_index]))
+                #await member.edit(mute=False, voice_channel=survivors_vc_list[0])
+            await self.process_mute(corpses_vc.members, mute_params_list[0])
+            for i in range(1, len(self._bots_list)):
+                await self.process_mute(self._bots_list[i].get_channel(self._corpses_voice_channel_id).members, mute_params_list[i])
+
+            self._corpses_list.clear()
+            self._is_muted = False
+
+            await self._disp_state(content="準備OK!")
+            logger.debug(f"unlock.")
+
+
+    async def process_mute(self, members: discord.Member, mute_member_params: typing.List[typing.List[typing.Any]]) -> None:
+        if members is None or mute_member_params is None:
+            return
+
+        logger.info("members:"+", ".join(["("+m.name+":"+str(m.id)+")" for m in members]))
+        logger.info("mute_member_params:"+", ".join(["("+str(m.id)+")" for m in mute_member_params]))
+        for member in members:
+            for mute_member_param in mute_member_params:
+                if member.id == mute_member_param.id:
+                    if mute_member_param.voice_channel is None:
+                        await member.edit(mute=mute_member_param.is_mute)
+                    else:
+                        await member.edit(mute=mute_member_param.is_mute, voice_channel=mute_member_param.voice_channel)
+
+
+    async def _disp_state(self, content):
+        if self._mute_control_mes is not None:
+            await self._mute_control_mes.edit(content=content)
+
+
+    def is_enable_channel(self, ctx) -> bool:
+        if self._command_enable_text_channel_id is None:
+            return True
+        return ctx.message.channel.id == self._command_enable_text_channel_id
+
+
+    def get_less_elements_list(self, target_list_list: typing.List[typing.List[typing.Any]]) -> typing.Tuple[typing.List[typing.Any], int]:
+        less_elements_index = len(target_list_list)-1
+        for i in range(less_elements_index-1, -1, -1):
+            if len(target_list_list[i]) < len(target_list_list[less_elements_index]):
+                less_elements_index = i
+        return target_list_list[less_elements_index], less_elements_index
+
+
+class MuteMemberParam:
+    def __init__(self, id: int=None, is_mute: bool= None, voice_channel: discord.abc.GuildChannel=None):
+        self.id = id
+        self.is_mute = is_mute
+        self.voice_channel = voice_channel
+
+
+if __name__ == "__main__":
+    log_format = "[%(asctime)s %(levelname)s %(name)s(%(lineno)s)][%(funcName)s] %(message)s"
+    logging.basicConfig(filename=f"MuteAll_ex.log", encoding="utf-8", filemode="w", format=log_format)
+    #logging.basicConfig(filename=f"MuteAll_ex.log", encoding="utf-8", filemode="w")
+    logging.getLogger().setLevel(level=logging.DEBUG)
+
+    with open("token.json", "r") as token_file:
+        config_contents = json.load(token_file)
+
+        BotEntry = namedtuple("BotEntry", "bot event")
+        intents = discord.Intents.default()
+        intents.members = True
+        bot_entries: typing.List[BotEntry] = [BotEntry(bot=commands.Bot(command_prefix="." if i==0 else f"._{i}", intents=intents), event=asyncio.Event()) for i in range(len(config_contents.get("token")))]
+        bot_list: typing.List[commands.Bot] = [bot_entry.bot for bot_entry in bot_entries]
+        for bot in bot_list:
+            bot.remove_command("help")
+        main_bot: commands.Bot = bot_entries[0].bot
+        message_listener_cog = MessageListenerCog(main_bot, bot_list, config_contents)
+        main_bot.add_cog(message_listener_cog)
+
+        # bot処理
+        # 起動時
+        loop = asyncio.get_event_loop()
+        async def login():
+            discord_token = config_contents.get("token")
+            for i in range(len(bot_entries)):
+                await bot_entries[i].bot.login(discord_token[i])
+        loop.run_until_complete(login())
+
+        async def connect(entry):
             try:
-                if user != client.user:  # this user is the user who reacted, ignore the initial reactions from the bot
-                    if reaction.message.author == client.user:  # this user is the author of the embed, should be the
-                        # bot itself, this check is needed so the bot doesn't mute/unmute on reactions to any other
-                        # messages
-                        if reaction.emoji == "🇲":
-                            await _mute(ctx)
-                            await reaction.remove(user)
+                await entry.bot.connect()
+            except Exception as e:
+                await entry.bot.close()
+                logger.warning(f"Exception:{e}")
+                entry.event.set()        
+        for bot_entry in bot_entries:
+            loop.create_task(connect(bot_entry))
 
-                        elif reaction.emoji == "🇺":
-                            await _unmute(ctx)
-                            await reaction.remove(user)
-
-                        elif reaction.emoji == "🇷":
-                            await reset_mute(ctx)
-                            await reaction.remove(user)
-
-                        elif reaction.emoji == "🇪":
-                            mute_control_mes = None
-                            await message.delete()
-
-            except discord.errors.Forbidden as e:
-                logger.warning(f"[on_reaction_add] caused other: {e}")
-                await ctx.send("ボット稼働に必要な権限が足りません: ボットに『管理者』が有効なロールを付与するか以下の権限を持つロールを付与して下さい\n"
-                               "『メッセージを送信』『メッセージの管理』『メッセージ履歴を読む』『リアクションの追加』『メンバーをミュート』『メンバーのスピーカーをミュート』『メンバーを移動』")
-
-    except discord.errors.Forbidden as e:
-        logger.warning(f"[start] caused other: {e}")
-        await ctx.send("ボット稼働に必要な権限が足りません: ボットに『管理者』が有効なロールを付与するか以下の権限を持つロールを付与して下さい\n"
-                       "『メッセージを送信』『メッセージの管理』『メッセージ履歴を読む』『リアクションの追加』『メンバーをミュート』『メンバーのスピーカーをミュート』『メンバーを移動』")
-
-    except discord.errors.NotFound as e:
-        logger.warning(f"[start] caused other: {e}")
-        await ctx.channel.send("スタートに失敗しました\n"
-                               "ボット稼働に必要な権限が付与されているか確認して下さい（以下のいずれかの条件を満たして下さい）\n"
-                               "・『管理者』が有効なロール\n"
-                               "・『メッセージを送信』『メッセージの管理』『メッセージ履歴を読む』『リアクションの追加』『メンバーをミュート』『メンバーのスピーカーをミュート』『メンバーを移動』が有効なロール")
-
-    except discord.errors.HTTPException as e:
-        logger.warning(f"[start] caused other: {e}")
-        await ctx.channel.send("スタートに失敗しました\n"
-                               "ボット稼働に必要な権限が付与されているか確認して下さい（以下のいずれかの条件を満たして下さい）\n"
-                               "・『管理者』が有効なロール\n"
-                               "・『メッセージを送信』『メッセージの管理』『メッセージ履歴を読む』『リアクションの追加』『メンバーをミュート』『メンバーのスピーカーをミュート』『メンバーを移動』が有効なロール")
-
-    except Exception as e:
-        logger.warning(f"[start] caused other: {e}")
-        await ctx.channel.send("スタートに失敗しました\n"
-                               "ボット稼働に必要な権限が付与されているか確認して下さい（以下のいずれかの条件を満たして下さい）\n"
-                               "・『管理者』が有効なロール\n"
-                               "・『メッセージを送信』『メッセージの管理』『メッセージ履歴を読む』『リアクションの追加』『メンバーをミュート』『メンバーのスピーカーをミュート』『メンバーを移動』が有効なロール")
-
-
-@client.event
-async def on_voice_state_update(member, before, after):
-    # Mute前に死亡者部屋へ移動出来なかった人のミュートを解除
-    if after.channel == client.get_channel(corpses_voice_channel_id) and member.voice.mute == True:
-        await member.edit(mute=False)
-        logger.debug(f"[on_voice_state_update] unmute {member.name}.")
-
-
-async def disp_state(content):
-    if mute_control_mes is not None:
-        await mute_control_mes.edit(content=content)
-
-
-# run the bot
-discord_token = str()
-with open("token.json", "r") as token_file:
-    json_contents = json.load(token_file)
-    discord_token               = json_contents["token"]
-    survivors_voice_channel_id  = json_contents["survivors_voice_channel_id"]
-    corpses_voice_channel_id    = json_contents["corpses_voice_channel_id"]
-client.run(discord_token)
+        # 終了時
+        async def check_close():
+            for bot_entry in bot_entries:
+                await bot_entry.event.wait()
+        loop.run_until_complete(check_close())
+        loop.close()

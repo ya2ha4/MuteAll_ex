@@ -7,6 +7,7 @@ MuteAll_ex は Among Us の会議を Discord のボイスチャットで行う�
 ミュートの有効/無効化は制御用メッセージのリアクションを押すことで切り替えることが出来ます。</br>
 <img src="screenshots/image_start_command.png" width="480px">
 
+
 ### 生存者/死亡者用ボイスチャンネルの半自動移動
 ユーザが死亡者用ボイスチャンネルへ移動すると、ボットが生存者用と死亡者用のボイスチャンネルを適時移動してくれるようになります。</br>
 会議を聞かせる為に死亡者を生存者用チャンネルに移動させる場合は自動でミュート状態となります。</br>
@@ -19,6 +20,11 @@ MuteAll_ex は Among Us の会議を Discord のボイスチャットで行う�
 
 #### 注意点：死亡者用ボイスチャンネルへの移動について
 インポスターにキルされた場合、次の会議が開かれるまで死亡者用ボイスチャンネルに移動しないで下さい（他ユーザにキルタイミングを教えてしまい、インポスター側が不利になることを防ぐためです）。
+
+
+### 複数ボットによる処理の高速化
+ボットアカウントは1つでも動作させることが可能ですが、複数のボットを使用し処理を分散させることも可能です。</br>
+参加人数が多く一部のユーザのミュート処理が遅れる場合に有効です。</br>
 
 
 ## セットアップ方法
@@ -69,20 +75,34 @@ token_template.json をコピーし名前を token.json に変更して以下の
 	1. [開発者サイト](https://discordapp.com/developers/applications/) のボット用アプリケーション "Bot" タブの</br>
 	"TOKEN" 項目にある "COPY" を選択（トークンは他人に知られないよう管理して下さい）
 	1. "token" の行、右側 " " の中にコピーしたトークン文字列を貼り付け
+		- 複数のボットを利用する場合は , で区切り ["トークン1", "トークン2", ... "トークンN"] となるよう記述して下さい
 - 生存者部屋 (survivors_voice_channel_id)
 	1. 生存者部屋ボイスチャンネルを右クリックして "IDをコピー" を選択
-	1. "survivors_voice_channel_id" の行、: の右側にコピーしたIDを貼り付け（, がある場合は、それより左側にコピー）
+	1. "survivors_voice_channel_id" の行、: の右側にコピーしたIDを貼り付け
 - 死亡者部屋 (corpses_voice_channel_id)
 	1. 生存者部屋ボイスチャンネルを右クリックして "IDをコピー" を選択
-	1. "corpses_voice_channel_id" の行、: の右側にコピーしたIDを貼り付け（, がある場合は、それより左側にコピー）
+	1. "corpses_voice_channel_id" の行、: の右側にコピーしたIDを貼り付け
+- ボット稼働テキストチャンネル (command_enable_text_channel_id)
+	1. ボットを動作させるテキストチャンネルを右クリックして "IDをコピー" を選択
+	1. "command_enable_text_channel_id" の行、: の右側にコピーしたIDを貼り付け
 
 <summary>token.json のサンプル</summary>
 
 <pre>
 {
-    "token": "AbCD1EFgH2IKLm3nOPQ4RsTU.VWxYZ5.ABCd6eFGH7IjKL8MNOp9qRST_UvWX1YZ",
+    "token": ["AbCD1EFgH2IKLm3nOPQ4RsTU.VWxYZ5.ABCd6eFGH7IjKL8MNOp9qRST_UvWX1YZ"],
     "survivors_voice_channel_id": 12345678901234567890,
-    "corpses_voice_channel_id": 12345678901234567891
+    "corpses_voice_channel_id": 12345678901234567891,
+    "command_enable_text_channel_id": 12345678901234567892
+}
+</pre>
+複数のボットで分散処理させる場合
+<pre>
+{
+    "token": ["AbCD1EFgH2IKLm3nOPQ4RsTU.VWxYZ5.ABCd6eFGH7IjKL8MNOp9qRST_UvWX1YZ", "BbCD1EFgH2IKLm3nOPQ4RsTU.VWxYZ5.ABCd6eFGH7IjKL8MNOp9qRST_UvWX1YZ"],
+    "survivors_voice_channel_id": 12345678901234567890,
+    "corpses_voice_channel_id": 12345678901234567891,
+    "command_enable_text_channel_id": 12345678901234567892
 }
 </pre>
 
@@ -106,7 +126,7 @@ token_template.json をコピーし名前を token.json に変更して以下の
 
 ## 基本機能（コマンド）
 - ```.s``` ```.start``` ミュート/ミュート解除をリアクションで操作するメッセージの作成
-- ```.help``` コマンドの説明
+- ```.h``` ```.help``` ```.H``` ```.Help``` コマンドの説明
 
 
 ## トラブル時の対応
