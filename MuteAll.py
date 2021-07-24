@@ -372,7 +372,7 @@ if __name__ == "__main__":
     #logging.basicConfig(filename=f"MuteAll_ex.log", encoding="utf-8", filemode="w")
     logging.getLogger().setLevel(level=logging.DEBUG)
 
-    with open("token.json", "r") as token_file:
+    with open("config.json", "r") as token_file:
         config_contents = json.load(token_file)
 
         BotEntry = namedtuple("BotEntry", "bot event")

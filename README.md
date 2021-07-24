@@ -31,7 +31,7 @@ MuteAll_ex は Among Us の会議を Discord のボイスチャットで行う�
 セットアップには以下の作業が必要です
 - Discord botアカウントの作成
 - Discordサーバの設定
-- bot起動用設定ファイル (token.json) 編集
+- bot起動用設定ファイル (config.json) 編集
 - ボットの実行環境作成
 
 
@@ -69,8 +69,8 @@ MuteAll_ex は Among Us の会議を Discord のボイスチャットで行う�
 	- メンバーのスピーカーをミュート
 
 
-### bot起動用設定ファイル (token.json) 編集
-token_template.json をコピーし名前を token.json に変更して以下の編集を行って下さい
+### bot起動用設定ファイル (config.json) 編集
+config_template.json をコピーし名前を config.json に変更して以下の編集を行って下さい
 - トークン (token)
 	1. [開発者サイト](https://discordapp.com/developers/applications/) のボット用アプリケーション "Bot" タブの</br>
 	"TOKEN" 項目にある "COPY" を選択（トークンは他人に知られないよう管理して下さい）
@@ -86,7 +86,7 @@ token_template.json をコピーし名前を token.json に変更して以下の
 	1. ボットを動作させるテキストチャンネルを右クリックして "IDをコピー" を選択
 	1. "command_enable_text_channel_id" の行、: の右側にコピーしたIDを貼り付け
 
-<summary>token.json のサンプル</summary>
+<summary>config.json のサンプル</summary>
 
 <pre>
 {

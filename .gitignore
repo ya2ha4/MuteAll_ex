@@ -1,5 +1,4 @@
 .venv
 MuteAll_ex.log
 Pipfile.lock
-token.json
-token_test.json
+config.json
