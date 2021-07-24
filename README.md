@@ -109,7 +109,7 @@ token_template.json をコピーし名前を token.json に変更して以下の
 
 ### ボット動作環境作成
 1. Python のインストール
-	- Pythonのインストーラをダウンロードしインストール（本ボットは3.7.*系で動作確認しています）
+	- Pythonのインストーラをダウンロードしインストール（本ボットは3.9.*系で動作確認しています）
 		- インストールする際 "Add Python *.* to PATH" の項目にチェックを付けて下さい
 		- Python公式 https://www.python.org/
 1. pipenv のインストール
