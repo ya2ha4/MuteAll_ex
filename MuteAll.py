@@ -366,7 +366,13 @@ class MuteMemberParam:
         self.voice_channel = voice_channel
 
 
-if __name__ == "__main__":
+class MuteBot(commands.Bot):
+    async def setup_hook(self) -> None:
+        await self.tree.sync()
+        return await super().setup_hook()
+
+
+def main() -> None:
     log_format = "[%(asctime)s %(levelname)s %(name)s(%(lineno)s)][%(funcName)s] %(message)s"
     logging.basicConfig(filename=f"MuteAll_ex.log", encoding="utf-8", filemode="w", format=log_format)
     #logging.basicConfig(filename=f"MuteAll_ex.log", encoding="utf-8", filemode="w")
@@ -375,39 +381,25 @@ if __name__ == "__main__":
     with open("config.json", "r") as token_file:
         config_contents = json.load(token_file)
 
-        BotEntry = namedtuple("BotEntry", "bot event")
+        BotEntry = namedtuple("BotEntry", "bot token")
         intents = discord.Intents.default()
         intents.members = True
-        bot_entries: typing.List[BotEntry] = [BotEntry(bot=commands.Bot(command_prefix="." if i==0 else f"._{i}", intents=intents), event=asyncio.Event()) for i in range(len(config_contents.get("token")))]
+        intents.message_content = True
+        bot_entries: typing.List[BotEntry] = [BotEntry(bot=MuteBot(command_prefix="." if i==0 else f"._{i}", intents=intents), token=config_contents.get("token")[i]) for i in range(len(config_contents.get("token")))]
         bot_list: typing.List[commands.Bot] = [bot_entry.bot for bot_entry in bot_entries]
         for bot in bot_list:
             bot.remove_command("help")
         main_bot: commands.Bot = bot_entries[0].bot
-        message_listener_cog = MessageListenerCog(main_bot, bot_list, config_contents)
-        main_bot.add_cog(message_listener_cog)
 
-        # bot処理
-        # 起動時
-        loop = asyncio.get_event_loop()
-        async def login():
-            discord_token = config_contents.get("token")
-            for i in range(len(bot_entries)):
-                await bot_entries[i].bot.login(discord_token[i])
-        loop.run_until_complete(login())
+        try:
+            loop = asyncio.get_event_loop()
+            message_listener_cog = MessageListenerCog(main_bot, bot_list, config_contents)
+            loop.run_until_complete(main_bot.add_cog(message_listener_cog))
+            cors = [entry.bot.start(entry.token) for entry in bot_entries]
+            loop.run_until_complete(asyncio.gather(*cors))
+        except Exception as e:
+            logger.warning(f"Exception:{e}")
 
-        async def connect(entry):
-            try:
-                await entry.bot.connect()
-            except Exception as e:
-                await entry.bot.close()
-                logger.warning(f"Exception:{e}")
-                entry.event.set()        
-        for bot_entry in bot_entries:
-            loop.create_task(connect(bot_entry))
 
-        # 終了時
-        async def check_close():
-            for bot_entry in bot_entries:
-                await bot_entry.event.wait()
-        loop.run_until_complete(check_close())
-        loop.close()
+if __name__ == "__main__":
+        main()
